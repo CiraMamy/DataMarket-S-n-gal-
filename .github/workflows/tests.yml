@@ -1,0 +1,58 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lancer la suite de tests
+        run: pytest -q test_datamarket.py
+
+      - name: Vérifier que l'application démarre sans exception
+        run: |
+          python - <<'PY'
+          from streamlit.testing.v1 import AppTest
+          at = AppTest.from_file("app.py", default_timeout=300)
+          at.run()
+          assert not at.exception, [str(e.value) for e in at.exception]
+          assert not at.error, [str(e.value) for e in at.error]
+          print(f"OK — {len(at.metric)} métriques rendues, 0 exception")
+          PY
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Vérifier l'absence de clé API dans l'historique
+        run: |
+          if git log -p | grep -qiE "sk-ant-[a-z0-9]"; then
+            echo "::error::Une clé API Anthropic est présente dans l'historique Git."
+            exit 1
+          fi
+          echo "Aucune clé API détectée dans l'historique."

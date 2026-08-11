@@ -1,0 +1,20 @@
+# DataMarket Sénégal — dépendances
+# Versions épinglées sur celles réellement testées : 134 tests passés,
+# application démarrée sans exception le 10 août 2026.
+
+streamlit==1.61.1
+streamlit-folium==0.26.2
+pandas==2.3.3
+numpy==2.2.6
+plotly==6.9.0
+folium==0.20.0
+branca==0.8.2
+requests==2.34.2
+reportlab==4.5.1
+
+# Optionnel — module 3 (interface conversationnelle).
+# Sans cette dépendance, l'analyseur local prend le relais automatiquement.
+anthropic>=0.40
+
+# Développement uniquement
+pytest==9.1.1
