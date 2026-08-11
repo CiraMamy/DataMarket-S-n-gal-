@@ -1,0 +1,26 @@
+# Secrets — ne jamais versionner
+.streamlit/secrets.toml
+.env
+*.key
+
+# Données et sorties
+data/raw/*
+!data/raw/.gitkeep
+data/geo/*.geojson
+exports/*.pdf
+catalogue_*.csv
+sondage_*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Système
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
