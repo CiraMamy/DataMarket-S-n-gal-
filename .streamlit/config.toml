@@ -1,0 +1,21 @@
+# DataMarket Sénégal — configuration Streamlit
+
+[theme]
+base = "light"
+primaryColor = "#00853F"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F5F9F5"
+textColor = "#1B2A32"
+
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = true
+maxUploadSize = 200
+
+[browser]
+gatherUsageStats = false
+
+[client]
+showErrorDetails = false
+toolbarMode = "minimal"

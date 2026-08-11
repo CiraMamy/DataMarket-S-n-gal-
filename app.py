@@ -1,0 +1,525 @@
+"""
+DataMarket Senegal - Application Streamlit
+==========================================
+Assemble les quatre modules du MVP.
+
+Lancement :
+    streamlit run app.py
+"""
+
+from __future__ import annotations
+
+import pandas as pd
+import streamlit as st
+
+import config
+import dashboard
+import geo as geo_module
+import market
+import nlp_agent
+from pipeline import charger_donnees
+from report import generer_rapport
+
+st.set_page_config(
+    page_title="DataMarket Sénégal",
+    page_icon="🇸🇳",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.markdown(
+    """
+    <style>
+      .block-container { padding-top: 2.2rem; max-width: 1400px; }
+      h1, h2, h3 { color: #00441B; }
+      div[data-testid="stMetricValue"] { font-size: 1.55rem; color: #00441B; }
+      div[data-testid="stMetric"] {
+          background: #F5F9F5; border: 1px solid #DCE8DC;
+          border-radius: 10px; padding: 14px 16px;
+      }
+      .bandeau {
+          background: linear-gradient(100deg, #00441B 0%, #00853F 55%, #41AB5D 100%);
+          padding: 22px 28px; border-radius: 12px; color: white;
+          margin-bottom: 22px;
+      }
+      .bandeau h1 { color: white !important; margin: 0; font-size: 1.9rem; }
+      .bandeau p { color: rgba(255,255,255,0.9); margin: 6px 0 0 0;
+                   font-size: 0.95rem; }
+      .encart {
+          background: #F5F9F5; border-left: 4px solid #00853F;
+          padding: 14px 18px; border-radius: 6px; margin: 10px 0;
+      }
+      .stTabs [data-baseweb="tab-list"] { gap: 4px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ==========================================================================
+# Chargement (mis en cache)
+# ==========================================================================
+
+@st.cache_data(show_spinner="Chargement des données ANSD…")
+def _donnees():
+    return charger_donnees()
+
+
+@st.cache_data(show_spinner="Chargement des frontières régionales…")
+def _geographie():
+    return geo_module.charger_geographie()
+
+
+@st.cache_data(show_spinner=False)
+def _potentiel(secteur: str):
+    return market.potentiel_par_region(_donnees(), secteur)
+
+
+jeu = _donnees()
+geographie = _geographie()
+
+if "resultat" not in st.session_state:
+    st.session_state.resultat = None
+    st.session_state.intention = None
+    st.session_state.phrase = ""
+    st.session_state.synthese = None
+
+
+# ==========================================================================
+# Barre laterale
+# ==========================================================================
+
+with st.sidebar:
+    st.markdown("### 🇸🇳 DataMarket Sénégal")
+    st.caption("Intelligence économique à partir des données ANSD")
+    st.divider()
+
+    cle_presente = bool(config.get_api_key())
+    if cle_presente:
+        st.success("API Claude connectée", icon="✅")
+    else:
+        st.warning("API Claude non configurée", icon="⚠️")
+        with st.expander("Activer l'IA"):
+            st.markdown(
+                "Ajoutez votre clé dans `.streamlit/secrets.toml` :\n"
+                "```toml\nANTHROPIC_API_KEY = \"sk-ant-...\"\n```\n"
+                "ou dans la variable d'environnement `ANTHROPIC_API_KEY`.\n\n"
+                "Sans clé, l'analyse des phrases se fait en local "
+                "(lexiques et expressions régulières) : moins souple sur les "
+                "formulations libres, mais entièrement fonctionnelle et gratuite."
+            )
+
+    forcer_local = st.toggle(
+        "Forcer l'analyse locale", value=not cle_presente,
+        help="Désactive tout appel à l'API Anthropic.")
+
+    st.divider()
+    st.markdown("#### Qualité des données")
+    st.dataframe(jeu.controle_qualite(), hide_index=True,
+                 width='stretch')
+
+    with st.expander("Journal de chargement"):
+        for ligne in jeu.journal:
+            st.caption(ligne)
+        st.caption(
+            f"Déposez vos exports ANSD dans `{config.RAW_DIR}` : "
+            "ils écrasent automatiquement les valeurs de référence.")
+
+    if geographie.mode == "cercles":
+        st.info(geographie.message, icon="🗺️")
+
+    st.divider()
+    st.caption(
+        f"Population nationale : "
+        f"{config.formater_nombre(config.POPULATION_NATIONALE)} hab. "
+        f"(RGPH-5 2023)\n\n"
+        f"Dépense/tête : "
+        f"{config.formater_fcfa(config.DEPENSE_ANNUELLE_TETE)}/an "
+        f"(EHCVM II 2021-2022)")
+
+
+# ==========================================================================
+# En-tete
+# ==========================================================================
+
+st.markdown(
+    """
+    <div class="bandeau">
+      <h1>DataMarket Sénégal</h1>
+      <p>Transformez les statistiques publiques de l'ANSD en études de marché
+         chiffrées — TAM, SAM, SOM, carte du potentiel et rapport exportable.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ==========================================================================
+# Module 3 - Saisie conversationnelle
+# ==========================================================================
+
+st.markdown("### Décrivez votre projet")
+
+exemples = [
+    "Je veux ouvrir une supérette à Mbour",
+    "Restaurant pour diabétiques à Dakar avec 25 millions",
+    "Unité de transformation d'arachide à Kaolack",
+    "Une boutique de quartier à Touba, budget 3 millions",
+]
+
+colonnes = st.columns(len(exemples))
+for colonne, exemple in zip(colonnes, exemples):
+    if colonne.button(exemple, width='stretch', key=f"ex_{exemple}"):
+        st.session_state.phrase = exemple
+
+phrase = st.text_input(
+    "Votre projet en une phrase",
+    value=st.session_state.phrase,
+    placeholder="Ex. : Je veux ouvrir une supérette à Mbour avec 15 millions de budget",
+    label_visibility="collapsed",
+)
+
+gauche, droite = st.columns([1, 5])
+lancer = gauche.button("Analyser", type="primary", width='stretch')
+
+if lancer and phrase.strip():
+    st.session_state.phrase = phrase
+    with st.spinner("Analyse de votre projet…"):
+        intention, resultat = nlp_agent.interroger(
+            jeu, phrase, forcer_local=forcer_local)
+        st.session_state.intention = intention
+        st.session_state.resultat = resultat
+        st.session_state.synthese = (
+            nlp_agent.redaction_synthese(intention, resultat)
+            if not forcer_local else None
+        ) or nlp_agent.synthese_locale(intention, resultat)
+elif lancer:
+    st.warning("Saisissez d'abord une description de votre projet.")
+
+
+# ==========================================================================
+# Resultats
+# ==========================================================================
+
+intention = st.session_state.intention
+resultat = st.session_state.resultat
+
+if resultat is not None:
+    st.divider()
+
+    # ---- Interpretation ------------------------------------------------
+    with st.container(border=True):
+        haut = st.columns([3, 1, 1])
+        haut[0].markdown(f"**Interprétation** — {intention.resume()}")
+        haut[1].metric("Moteur", "Claude" if intention.moteur == "claude" else "Local")
+        haut[2].metric("Confiance", f"{intention.confiance:.0%}")
+
+        if intention.notes:
+            with st.expander("Détail de l'interprétation"):
+                for note in intention.notes:
+                    st.caption("• " + note)
+
+        st.caption(
+            "Ajustez ci-dessous si l'interprétation ne correspond pas à votre projet.")
+
+        ajuste = st.columns(4)
+        secteur_choisi = ajuste[0].selectbox(
+            "Secteur",
+            options=list(config.SECTEURS),
+            index=list(config.SECTEURS).index(intention.secteur),
+            format_func=lambda c: config.SECTEURS[c]["libelle"],
+        )
+        regions_choisies = ajuste[1].multiselect(
+            "Régions",
+            options=config.REGIONS,
+            default=intention.regions,
+            format_func=lambda r: config.REGIONS_AFFICHAGE.get(r, r),
+        )
+        part_geo = ajuste[2].slider(
+            "Zone de chalandise (% de la région)",
+            0.5, 100.0,
+            value=float(100 * (intention.part_geographique
+                               or config.SECTEURS[secteur_choisi]["sam_defaut"])),
+            step=0.5,
+        ) / 100
+        part_som = ajuste[3].slider(
+            "Part de marché visée à 3 ans (%)",
+            0.1, 50.0,
+            value=float(100 * (intention.part_marche_visee
+                               or config.SECTEURS[secteur_choisi]["som_defaut"])),
+            step=0.1,
+        ) / 100
+
+        if st.button("Recalculer avec ces paramètres"):
+            st.session_state.resultat = market.calculer(
+                jeu, secteur_choisi, regions=regions_choisies,
+                part_geographique=part_geo, part_marche_visee=part_som,
+                budget=intention.budget)
+            resultat = st.session_state.resultat
+            st.session_state.synthese = nlp_agent.synthese_locale(
+                intention, resultat)
+            st.rerun()
+
+    # ---- Indicateurs cles ----------------------------------------------
+    st.markdown("### Résultat")
+    mesures = st.columns(4)
+    mesures[0].metric("TAM — marché total", config.formater_fcfa(resultat.tam))
+    mesures[1].metric(
+        "SAM — accessible", config.formater_fcfa(resultat.sam),
+        f"{100 * resultat.sam / resultat.tam:.1f} % du TAM" if resultat.tam else "—")
+    mesures[2].metric(
+        "SOM — captable à 3 ans", config.formater_fcfa(resultat.som),
+        f"{100 * resultat.som / resultat.tam:.2f} % du TAM" if resultat.tam else "—")
+    mesures[3].metric("CA mensuel visé",
+                      config.formater_fcfa(resultat.ca_mensuel_som))
+
+    for avertissement in resultat.avertissements:
+        st.warning(avertissement, icon="⚠️")
+
+    # ---- Onglets --------------------------------------------------------
+    onglets = st.tabs([
+        "Synthèse", "Carte du potentiel", "Détail régional",
+        "Comparaison sectorielle", "Données sources", "Export PDF",
+    ])
+
+    # Synthese
+    with onglets[0]:
+        colg, cold = st.columns([3, 2])
+        with colg:
+            st.markdown("#### Lecture stratégique")
+            if st.session_state.synthese:
+                st.markdown(
+                    f'<div class="encart">{st.session_state.synthese}</div>',
+                    unsafe_allow_html=True)
+        with cold:
+            st.plotly_chart(dashboard.graphique_entonnoir(resultat),
+                            width='stretch')
+
+        st.markdown("#### Repères")
+        reperes = st.columns(3)
+        reperes[0].metric("Population cible",
+                          config.formater_nombre(resultat.population_cible))
+        transactions = resultat.clients_potentiels()
+        if transactions:
+            reperes[1].metric("Transactions / jour",
+                              config.formater_nombre(transactions / 365))
+            reperes[2].metric(
+                "Panier moyen retenu",
+                config.formater_fcfa(resultat.hypotheses["ticket_moyen_fcfa"]))
+        else:
+            reperes[1].metric("Régions couvertes", len(resultat.regions))
+            reperes[2].metric(
+                "Capex minimal du secteur",
+                config.formater_fcfa(resultat.hypotheses.get("capex_min_fcfa", 0)))
+
+    # Carte
+    with onglets[1]:
+        st.markdown("#### Potentiel de marché par région")
+        st.caption(
+            "Score composite : 70 % volume de marché (TAM absolu) et 30 % "
+            "intensité (TAM par habitant). Calculé sur les 14 régions pour le "
+            "secteur retenu, indépendamment du périmètre de votre projet.")
+
+        potentiel = _potentiel(resultat.secteur)
+
+        try:
+            from streamlit_folium import st_folium
+
+            carte = dashboard.carte_potentiel(potentiel, geographie)
+            st_folium(carte, height=560, use_container_width=True,
+                      returned_objects=[])
+        except ImportError:
+            st.error(
+                "Le paquet `streamlit-folium` est absent. "
+                "Installez-le avec `pip install streamlit-folium` pour afficher "
+                "la carte.")
+
+        if geographie.mode != "cercles":
+            manquantes = geo_module.regions_manquantes(geographie)
+            if manquantes:
+                st.caption(
+                    "Régions sans polygone dans le fond de carte : "
+                    + ", ".join(config.REGIONS_AFFICHAGE.get(r, r)
+                                for r in manquantes))
+
+        st.plotly_chart(dashboard.graphique_tam_regions(potentiel),
+                        width='stretch')
+        st.plotly_chart(dashboard.graphique_structure(potentiel),
+                        width='stretch')
+
+    # Detail regional
+    with onglets[2]:
+        st.markdown("#### Décomposition du marché sur votre périmètre")
+        detail = resultat.detail_regional.copy()
+        detail["Région"] = detail["region"].map(
+            lambda r: config.REGIONS_AFFICHAGE.get(r, r))
+
+        affichage = pd.DataFrame({
+            "Région": detail["Région"],
+            "Population": detail["population"].map(config.formater_nombre),
+            "Population cible": detail["population_cible"].map(config.formater_nombre),
+            "Dépense/tête": detail["depense_cible_tete"].map(config.formater_fcfa),
+            "TAM": detail["tam_region"].map(config.formater_fcfa),
+            "SAM": detail["sam_region"].map(config.formater_fcfa),
+            "SOM": detail["som_region"].map(config.formater_fcfa),
+            "% du TAM": detail["part_tam_pct"].map(lambda v: f"{v:.1f} %"),
+        })
+        st.dataframe(affichage, hide_index=True, width='stretch')
+
+        st.download_button(
+            "Télécharger ce tableau (CSV)",
+            detail.to_csv(index=False).encode("utf-8-sig"),
+            file_name=f"detail_{resultat.secteur}.csv",
+            mime="text/csv",
+        )
+
+        with st.expander("Hypothèses de calcul utilisées"):
+            lignes = []
+            for cle, valeur in resultat.hypotheses.items():
+                if cle in {"libelle", "description", "poste_depense"} or valeur is None:
+                    continue
+                lignes.append({
+                    "Hypothèse": cle.replace("_", " ").capitalize(),
+                    "Valeur": (f"{valeur:.1%}"
+                               if isinstance(valeur, float) and 0 < abs(valeur) < 1
+                               else config.formater_nombre(valeur)
+                               if isinstance(valeur, (int, float))
+                               else str(valeur)),
+                })
+            st.dataframe(pd.DataFrame(lignes), hide_index=True,
+                         width='stretch')
+
+    # Comparaison sectorielle
+    with onglets[3]:
+        st.markdown("#### Les trois secteurs sur le même périmètre")
+        comparaison = market.comparer_secteurs(jeu, regions=resultat.regions)
+        st.plotly_chart(dashboard.graphique_secteurs(comparaison),
+                        width='stretch')
+        st.dataframe(
+            comparaison[["Secteur", "TAM", "SAM", "SOM", "CA mensuel visé"]],
+            hide_index=True, width='stretch')
+        st.caption(
+            "Échelle logarithmique : les ordres de grandeur diffèrent fortement "
+            "d'un secteur à l'autre. La restauration santé vise une niche "
+            "étroite mais à forte valeur unitaire ; le commerce de proximité "
+            "adresse un marché de masse.")
+
+    # Donnees sources
+    with onglets[4]:
+        st.markdown("#### Données ANSD normalisées")
+        sous = st.tabs(["Population (RGPH-5)", "Dépenses (EHCVM II)",
+                        "Production agricole (EAA)"])
+
+        with sous[0]:
+            pop = jeu.population.copy()
+            pop["Région"] = pop["region"].map(
+                lambda r: config.REGIONS_AFFICHAGE.get(r, r))
+            st.dataframe(
+                pop[["Région", "population", "superficie_km2", "densite",
+                     "part_nationale_pct", "taux_urbain_pct",
+                     "population_urbaine", "nb_menages"]].round(1),
+                hide_index=True, width='stretch')
+            st.caption(
+                f"Total : {config.formater_nombre(pop['population'].sum())} "
+                f"habitants — à comparer au chiffre officiel RGPH-5 de "
+                f"{config.formater_nombre(config.POPULATION_NATIONALE)}.")
+
+        with sous[1]:
+            dep = jeu.depenses.copy()
+            dep["Région"] = dep["region"].map(
+                lambda r: config.REGIONS_AFFICHAGE.get(r, r))
+            colonnes = ["Région", "depense_tete", "depense_totale_region"] + [
+                c for c in dep.columns if c.startswith("part_")]
+            st.dataframe(dep[colonnes].round(1), hide_index=True,
+                         width='stretch')
+
+        with sous[2]:
+            st.plotly_chart(dashboard.graphique_production(jeu.production),
+                            width='stretch')
+            prod = jeu.production.copy()
+            prod["Région"] = prod["region"].map(
+                lambda r: config.REGIONS_AFFICHAGE.get(r, r))
+            st.dataframe(
+                prod[["Région"] + [c for c in prod.columns if c.endswith("_t")]],
+                hide_index=True, width='stretch')
+
+    # Export PDF
+    with onglets[5]:
+        st.markdown("#### Rapport d'étude exportable")
+        st.caption(
+            "Document de 4 pages : synthèse chiffrée, détail région par "
+            "région, méthodologie complète, sources et limites.")
+
+        if st.button("Générer le rapport PDF", type="primary"):
+            with st.spinner("Génération du rapport…"):
+                try:
+                    chemin = generer_rapport(
+                        resultat,
+                        synthese=st.session_state.synthese,
+                        intention_brute=st.session_state.phrase,
+                    )
+                    st.session_state.pdf = chemin
+                    st.success(f"Rapport généré : {chemin.name}")
+                except Exception as erreur:
+                    st.error(f"Échec de la génération : {erreur}")
+
+        if st.session_state.get("pdf") and st.session_state.pdf.exists():
+            st.download_button(
+                "Télécharger le PDF",
+                st.session_state.pdf.read_bytes(),
+                file_name=st.session_state.pdf.name,
+                mime="application/pdf",
+                type="primary",
+            )
+
+else:
+    # ---- Ecran d'accueil ------------------------------------------------
+    st.divider()
+    st.markdown("### Panorama national")
+
+    secteur_apercu = st.selectbox(
+        "Secteur à explorer",
+        options=list(config.SECTEURS),
+        format_func=lambda c: config.SECTEURS[c]["libelle"],
+    )
+    st.caption(config.SECTEURS[secteur_apercu]["description"])
+
+    potentiel = _potentiel(secteur_apercu)
+    national = market.calculer(jeu, secteur_apercu)
+
+    mesures = st.columns(4)
+    mesures[0].metric("TAM national", config.formater_fcfa(national.tam))
+    mesures[1].metric("Population cible",
+                      config.formater_nombre(national.population_cible))
+    mesures[2].metric("Région n°1",
+                      config.REGIONS_AFFICHAGE.get(potentiel.iloc[0]["region"], ""))
+    mesures[3].metric("TAM de la région n°1",
+                      config.formater_fcfa(potentiel.iloc[0]["tam_region"]))
+
+    colg, cold = st.columns([3, 2])
+    with colg:
+        try:
+            from streamlit_folium import st_folium
+
+            st_folium(dashboard.carte_potentiel(potentiel, geographie),
+                      height=520, use_container_width=True,
+                      returned_objects=[])
+        except ImportError:
+            st.info("Installez `streamlit-folium` pour afficher la carte.")
+    with cold:
+        st.dataframe(
+            potentiel[["rang", "region_affichage", "tam_lisible",
+                       "score_potentiel"]].rename(columns={
+                           "rang": "Rang", "region_affichage": "Région",
+                           "tam_lisible": "TAM", "score_potentiel": "Score"}),
+            hide_index=True, width='stretch', height=520)
+
+    st.plotly_chart(dashboard.graphique_tam_regions(potentiel),
+                    width='stretch')
+
+st.divider()
+st.caption(
+    "DataMarket Sénégal — sources : RGPH-5 2023 (ANSD), EHCVM II 2021-2022, "
+    "EAA/DAPSA. Outil de cadrage : les montants sont des ordres de grandeur "
+    "dérivés de moyennes régionales et ne remplacent pas une étude terrain."
+)
