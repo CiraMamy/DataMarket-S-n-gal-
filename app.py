@@ -298,7 +298,8 @@ if resultat is not None:
     # ---- Onglets --------------------------------------------------------
     onglets = st.tabs([
         "Synthèse", "Carte du potentiel", "Détail régional",
-        "Comparaison sectorielle", "Données sources", "Export PDF",
+        "Comparateur de territoires", "Comparaison sectorielle",
+        "Données sources", "Export PDF",
     ])
 
     # Synthese
@@ -423,8 +424,71 @@ if resultat is not None:
             st.dataframe(pd.DataFrame(lignes), hide_index=True,
                          width='stretch')
 
-    # Comparaison sectorielle
+    # Comparateur de territoires
     with onglets[3]:
+        st.markdown("#### Comparer deux territoires")
+        st.caption(
+            "Comparaison sur les hypothèses par défaut du secteur "
+            f"« {resultat.libelle} », indépendamment du périmètre de votre étude.")
+
+        potentiel_cmp = _potentiel(resultat.secteur)
+        options_regions = potentiel_cmp["region"].tolist()
+
+        col_a, col_b = st.columns(2)
+        region_a = col_a.selectbox(
+            "Territoire A", options=options_regions, index=0,
+            format_func=lambda r: config.REGIONS_AFFICHAGE.get(r, r),
+            key="cmp_region_a")
+        index_b = 1 if len(options_regions) > 1 else 0
+        region_b = col_b.selectbox(
+            "Territoire B", options=options_regions, index=index_b,
+            format_func=lambda r: config.REGIONS_AFFICHAGE.get(r, r),
+            key="cmp_region_b")
+
+        if region_a == region_b:
+            st.info("Choisissez deux territoires différents pour comparer.")
+        else:
+            ligne_a = potentiel_cmp.loc[potentiel_cmp["region"] == region_a].iloc[0]
+            ligne_b = potentiel_cmp.loc[potentiel_cmp["region"] == region_b].iloc[0]
+            libelle_a = config.REGIONS_AFFICHAGE.get(region_a, region_a)
+            libelle_b = config.REGIONS_AFFICHAGE.get(region_b, region_b)
+
+            tableau_cmp = pd.DataFrame({
+                "Indicateur": ["Population", "TAM", "TAM / habitant",
+                               "Score de potentiel", "Rang national"],
+                libelle_a: [
+                    config.formater_nombre(ligne_a["population"]),
+                    config.formater_fcfa(ligne_a["tam_region"]),
+                    config.formater_fcfa(ligne_a["tam_par_habitant"]),
+                    f"{ligne_a['score_potentiel']:.1f} / 100",
+                    f"{int(ligne_a['rang'])}ᵉ / 14",
+                ],
+                libelle_b: [
+                    config.formater_nombre(ligne_b["population"]),
+                    config.formater_fcfa(ligne_b["tam_region"]),
+                    config.formater_fcfa(ligne_b["tam_par_habitant"]),
+                    f"{ligne_b['score_potentiel']:.1f} / 100",
+                    f"{int(ligne_b['rang'])}ᵉ / 14",
+                ],
+            })
+            st.dataframe(tableau_cmp, hide_index=True, width='stretch')
+
+            ecart_tam = float(ligne_a["tam_region"] - ligne_b["tam_region"])
+            plus_grand = libelle_a if ecart_tam >= 0 else libelle_b
+            st.markdown(
+                f"{config.badge_html(resultat.provenance.get('tam', 'HYP'))} "
+                f"Le TAM de **{plus_grand}** dépasse celui de son comparateur "
+                f"de {config.formater_fcfa(abs(ecart_tam))}, sur les hypothèses "
+                f"par défaut du secteur.",
+                unsafe_allow_html=True)
+
+            st.plotly_chart(
+                dashboard.graphique_comparaison_territoires(
+                    ligne_a, ligne_b, libelle_a, libelle_b, resultat.libelle),
+                width='stretch')
+
+    # Comparaison sectorielle
+    with onglets[4]:
         st.markdown("#### Les trois secteurs sur le même périmètre")
         comparaison = market.comparer_secteurs(jeu, regions=resultat.regions)
         st.plotly_chart(dashboard.graphique_secteurs(comparaison),
@@ -439,7 +503,7 @@ if resultat is not None:
             "adresse un marché de masse.")
 
     # Donnees sources
-    with onglets[4]:
+    with onglets[5]:
         st.markdown("#### Données ANSD normalisées")
         sous = st.tabs(["Population (RGPH-5)", "Dépenses (EHCVM II)",
                         "Production agricole (EAA)"])
@@ -478,7 +542,7 @@ if resultat is not None:
                 hide_index=True, width='stretch')
 
     # Export PDF
-    with onglets[5]:
+    with onglets[6]:
         st.markdown("#### Rapport d'étude exportable")
         st.caption(
             "Document de 4 pages : synthèse chiffrée, détail région par "

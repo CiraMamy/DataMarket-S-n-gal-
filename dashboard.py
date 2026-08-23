@@ -8,6 +8,7 @@ MODULE 4 (partie visualisation) - Cartes et graphiques
   graphique_entonnoir()    Entonnoir TAM -> SAM -> SOM.
   graphique_secteurs()     Comparaison des trois secteurs.
   graphique_structure()    Population cible vs depense par tete.
+  graphique_comparaison_territoires()  Deux regions cote a cote.
 """
 
 from __future__ import annotations
@@ -284,6 +285,56 @@ def graphique_structure(potentiel: pd.DataFrame) -> go.Figure:
     )
     figure.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.06)")
     figure.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.06)")
+    return figure
+
+
+def graphique_comparaison_territoires(
+    ligne_a: pd.Series, ligne_b: pd.Series,
+    libelle_a: str, libelle_b: str, titre_secteur: str,
+) -> go.Figure:
+    """
+    Barres groupees horizontales comparant deux territoires sur plusieurs
+    indicateurs d'unites differentes (habitants, FCFA, score). Chaque
+    indicateur est normalise a 100 = la valeur la plus elevee des deux
+    territoires, pour rendre les echelles comparables sur un meme graphique.
+    """
+    indicateurs = [
+        ("Population", "population", config.formater_nombre),
+        ("TAM", "tam_region", config.formater_fcfa),
+        ("TAM / habitant", "tam_par_habitant", config.formater_fcfa),
+        ("Score de potentiel", "score_potentiel", lambda v: f"{v:.1f} / 100"),
+    ]
+    noms, valeurs_a, valeurs_b, texte_a, texte_b = [], [], [], [], []
+    for label, cle, fmt in indicateurs:
+        va = float(ligne_a[cle])
+        vb = float(ligne_b[cle])
+        maxi = max(va, vb) or 1.0
+        noms.append(label)
+        valeurs_a.append(100 * va / maxi)
+        valeurs_b.append(100 * vb / maxi)
+        texte_a.append(fmt(va))
+        texte_b.append(fmt(vb))
+
+    figure = go.Figure()
+    figure.add_trace(go.Bar(
+        name=libelle_a, y=noms, x=valeurs_a, orientation="h",
+        marker_color="#00853F", text=texte_a, textposition="outside",
+        hovertemplate="<b>%{y}</b><br>%{text}<extra></extra>",
+    ))
+    figure.add_trace(go.Bar(
+        name=libelle_b, y=noms, x=valeurs_b, orientation="h",
+        marker_color="#E8A33D", text=texte_b, textposition="outside",
+        hovertemplate="<b>%{y}</b><br>%{text}<extra></extra>",
+    ))
+    figure.update_layout(
+        title=f"{libelle_a} contre {libelle_b} — {titre_secteur}",
+        barmode="group",
+        xaxis_title="Indice relatif (100 = valeur la plus élevée des deux territoires)",
+        height=380,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
+        **_MISE_EN_PAGE,
+    )
+    figure.update_xaxes(range=[0, 118], showgrid=True, gridcolor="rgba(0,0,0,0.06)")
     return figure
 
 
