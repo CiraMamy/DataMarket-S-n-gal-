@@ -58,6 +58,7 @@ class ResultatMarche:
     detail_regional: pd.DataFrame
     hypotheses: dict = field(default_factory=dict)
     avertissements: list[str] = field(default_factory=list)
+    provenance: dict = field(default_factory=dict)
 
     @property
     def perimetre(self) -> str:
@@ -338,6 +339,21 @@ def calculer(
         "population_nationale": config.POPULATION_NATIONALE,
     }
 
+    # --- Provenance (DATA_MAPPING.md section 0) --------------------------
+    # depense_cible_tete mobilise toujours un coefficient de modelisation
+    # (captation, part restauration hors domicile, part transformee) : HYP.
+    prov_population = p.get("provenance_population_cible", "EST")
+    prov_depense = "HYP"
+    prov_tam = config.propager_provenance(prov_population, prov_depense)
+    prov_sam = config.propager_provenance(prov_tam, "HYP")   # part_geographique
+    prov_som = config.propager_provenance(prov_sam, "HYP")   # part_marche_visee
+    provenance = {
+        "population_cible": prov_population,
+        "tam": prov_tam,
+        "sam": prov_sam,
+        "som": prov_som,
+    }
+
     return ResultatMarche(
         secteur=secteur,
         libelle=p["libelle"],
@@ -349,6 +365,7 @@ def calculer(
         detail_regional=detail,
         hypotheses=hypotheses,
         avertissements=avertissements,
+        provenance=provenance,
     )
 
 

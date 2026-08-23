@@ -129,13 +129,24 @@ with st.sidebar:
         st.info(geographie.message, icon="🗺️")
 
     st.divider()
-    st.caption(
+    st.markdown(
         f"Population nationale : "
         f"{config.formater_nombre(config.POPULATION_NATIONALE)} hab. "
-        f"(RGPH-5 2023)\n\n"
+        f"(RGPH-5 2023) {config.badge_html('OBS')}<br>"
         f"Dépense/tête : "
         f"{config.formater_fcfa(config.DEPENSE_ANNUELLE_TETE)}/an "
-        f"(EHCVM II 2021-2022)")
+        f"(EHCVM II 2021-2022) {config.badge_html('OBS')}"
+        f'<div style="font-size:0.8rem;color:#666;margin-top:4px;">'
+        f"Ventilation par région {config.badge_html('EST')} dérivée des parts "
+        f"publiées — remplaçable par vos exports ANSD.</div>",
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("Légende des badges"):
+        for code in ("OBS", "EST", "HYP"):
+            info = config.PROVENANCE[code]
+            st.markdown(f"{config.badge_html(code)}  {info['titre']}",
+                        unsafe_allow_html=True)
 
 
 # ==========================================================================
@@ -261,7 +272,15 @@ if resultat is not None:
             st.rerun()
 
     # ---- Indicateurs cles ----------------------------------------------
-    st.markdown("### Résultat")
+    st.markdown(
+        f"### Résultat {config.badge_html(resultat.provenance.get('tam', 'HYP'))}",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "TAM, SAM et SOM combinent des données observées et des hypothèses "
+        "sectorielles modifiables (captation, prévalence, part transformée) : "
+        "ils héritent donc du classement Hypothèse — voir l'onglet "
+        "« Détail régional » pour la liste complète.")
     mesures = st.columns(4)
     mesures[0].metric("TAM — marché total", config.formater_fcfa(resultat.tam))
     mesures[1].metric(
@@ -295,7 +314,10 @@ if resultat is not None:
             st.plotly_chart(dashboard.graphique_entonnoir(resultat),
                             width='stretch')
 
-        st.markdown("#### Repères")
+        st.markdown(
+            f"#### Repères "
+            f"{config.badge_html(resultat.provenance.get('population_cible', 'EST'))}",
+            unsafe_allow_html=True)
         reperes = st.columns(3)
         reperes[0].metric("Population cible",
                           config.formater_nombre(resultat.population_cible))
@@ -350,6 +372,12 @@ if resultat is not None:
     # Detail regional
     with onglets[2]:
         st.markdown("#### Décomposition du marché sur votre périmètre")
+        st.markdown(
+            f"Population {config.badge_html(resultat.provenance.get('population_cible', 'EST'))}"
+            f"&nbsp;&nbsp;·&nbsp;&nbsp;"
+            f"TAM / SAM / SOM {config.badge_html(resultat.provenance.get('tam', 'HYP'))}",
+            unsafe_allow_html=True,
+        )
         detail = resultat.detail_regional.copy()
         detail["Région"] = detail["region"].map(
             lambda r: config.REGIONS_AFFICHAGE.get(r, r))
@@ -374,9 +402,15 @@ if resultat is not None:
         )
 
         with st.expander("Hypothèses de calcul utilisées"):
+            st.markdown(
+                f"{config.badge_html('HYP')} Chaque ligne ci-dessous est un "
+                f"paramètre de modélisation explicite — ajustez-le avec vos "
+                f"observations terrain.",
+                unsafe_allow_html=True)
             lignes = []
             for cle, valeur in resultat.hypotheses.items():
-                if cle in {"libelle", "description", "poste_depense"} or valeur is None:
+                if cle in {"libelle", "description", "poste_depense",
+                           "provenance_population_cible"} or valeur is None:
                     continue
                 lignes.append({
                     "Hypothèse": cle.replace("_", " ").capitalize(),
@@ -475,7 +509,12 @@ if resultat is not None:
 else:
     # ---- Ecran d'accueil ------------------------------------------------
     st.divider()
-    st.markdown("### Panorama national")
+    st.markdown(
+        f"### Panorama national {config.badge_html('HYP')}",
+        unsafe_allow_html=True)
+    st.caption(
+        "Le TAM combine des données observées et des hypothèses sectorielles "
+        "modifiables — voir la légende des badges dans la barre latérale.")
 
     secteur_apercu = st.selectbox(
         "Secteur à explorer",

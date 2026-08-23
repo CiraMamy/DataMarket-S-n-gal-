@@ -179,6 +179,9 @@ SECTEURS = {
         "som_defaut": 0.03,
         "ticket_moyen_fcfa": 3500,
         "capex_min_fcfa": 8_000_000,
+        # Population cible = ventilation regionale brute, sans filtre
+        # comportemental : classee EST (derivee des parts publiees).
+        "provenance_population_cible": "EST",
     },
     "restauration_sante": {
         "libelle": "Restauration santé / diabète",
@@ -198,6 +201,9 @@ SECTEURS = {
         "som_defaut": 0.05,
         "ticket_moyen_fcfa": 4500,
         "capex_min_fcfa": 15_000_000,
+        # Population cible = ventilation filtree par prevalence/solvabilite,
+        # deux hypotheses de modelisation : classee HYP.
+        "provenance_population_cible": "HYP",
     },
     "agrobusiness": {
         "libelle": "Agrobusiness (transformation agroalimentaire)",
@@ -215,6 +221,9 @@ SECTEURS = {
         "som_defaut": 0.04,
         "ticket_moyen_fcfa": 0,
         "capex_min_fcfa": 35_000_000,
+        # Population cible = ventilation regionale brute (demande aval) ;
+        # le TAM est ensuite borne par le gisement amont : classee EST.
+        "provenance_population_cible": "EST",
     },
 }
 
@@ -249,6 +258,54 @@ PALETTE = {
 }
 
 ECHELLE_CHOROPLETHE = "YlGn"
+
+# --------------------------------------------------------------------------
+# Provenance des donnees (tracabilite, cf. DATA_MAPPING.md section 0)
+# --------------------------------------------------------------------------
+# Chaque valeur affichee dans l'interface porte un classement de fiabilite.
+# Regle de propagation : le classement d'un calcul est celui de son intrant
+# le moins fiable, dans l'ordre croissant d'incertitude ci-dessous. Un TAM
+# qui combine une population OBS et une hypothese de captation HYP est donc
+# classe HYP, jamais OBS.
+ORDRE_PROVENANCE = ["OBS", "CALC", "EST", "PROJ", "HYP"]
+
+PROVENANCE = {
+    "OBS": {"label": "OBS", "titre": "Donnée observée — publication officielle",
+            "bg": "#FFFFFF", "bordure": "#00853F", "texte": "#00441B"},
+    "CALC": {"label": "CALC", "titre": "Indicateur calculé à partir de données observées",
+             "bg": "#FFFFFF", "bordure": "#6C757D", "texte": "#333333"},
+    "EST": {"label": "EST", "titre": "Estimation — ventilation dérivée de parts publiées",
+            "bg": "#FFF3CD", "bordure": "#E8A33D", "texte": "#7A4E00"},
+    "PROJ": {"label": "PROJ", "titre": "Projection dans le futur",
+              "bg": "#FFF3CD", "bordure": "#E8A33D", "texte": "#7A4E00"},
+    "HYP": {"label": "HYP", "titre": "Hypothèse de modélisation — modifiable",
+            "bg": "#E7F1FF", "bordure": "#3B82C4", "texte": "#1B4D7A"},
+    "EXT": {"label": "EXT", "titre": "Donnée externe, hors ANSD",
+            "bg": "#F5F5F5", "bordure": "#999999", "texte": "#555555"},
+    "ND": {"label": "N/D", "titre": "Donnée non disponible dans les sources intégrées",
+           "bg": "#F0F0F0", "bordure": "#CCCCCC", "texte": "#888888"},
+}
+
+
+def propager_provenance(*codes: str) -> str:
+    """Classement d'un calcul = celui de son intrant le moins fiable."""
+    presents = [c for c in codes if c in ORDRE_PROVENANCE]
+    if not presents:
+        return "CALC"
+    return max(presents, key=ORDRE_PROVENANCE.index)
+
+
+def badge_html(code: str, texte: str | None = None) -> str:
+    """Pastille HTML compacte signalant la provenance d'une valeur."""
+    info = PROVENANCE.get(code, PROVENANCE["ND"])
+    libelle = texte or info["label"]
+    return (
+        f'<span title="{info["titre"]}" style="display:inline-block;'
+        f'padding:1px 7px;border-radius:9px;font-size:0.68rem;font-weight:700;'
+        f'letter-spacing:0.02em;background:{info["bg"]};'
+        f'border:1px solid {info["bordure"]};color:{info["texte"]};'
+        f'margin-left:5px;vertical-align:middle;">{libelle}</span>'
+    )
 
 
 def formater_fcfa(montant: float) -> str:
