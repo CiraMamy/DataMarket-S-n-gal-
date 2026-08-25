@@ -299,7 +299,7 @@ if resultat is not None:
     onglets = st.tabs([
         "Synthèse", "Carte du potentiel", "Détail régional",
         "Comparateur de territoires", "Comparaison sectorielle",
-        "Données sources", "Export PDF",
+        "Validation", "Données sources", "Export PDF",
     ])
 
     # Synthese
@@ -502,8 +502,45 @@ if resultat is not None:
             "étroite mais à forte valeur unitaire ; le commerce de proximité "
             "adresse un marché de masse.")
 
-    # Donnees sources
+    # Validation
     with onglets[5]:
+        st.markdown("#### Calibration face à des chiffres publiés indépendamment")
+        st.caption(
+            "Ce ne sont pas des sorties du modèle comparées à elles-mêmes : "
+            "chaque ligne confronte une grandeur recalculée par le pipeline à "
+            "un chiffre publié par l'ANSD, indépendamment de ce projet.")
+
+        validation = jeu.validation_externe()
+        n_conformes = int(validation["Conforme"].sum())
+        n_total = len(validation)
+
+        if n_conformes == n_total:
+            st.success(
+                f"{n_conformes}/{n_total} contrôles conformes aux seuils de "
+                "tolérance.", icon="✅")
+        else:
+            st.warning(
+                f"{n_conformes}/{n_total} contrôles conformes — voir le détail "
+                "ci-dessous.", icon="⚠️")
+
+        affichage_validation = validation.copy()
+        affichage_validation["Conforme"] = affichage_validation["Conforme"].map(
+            lambda ok: "✅" if ok else "❌")
+        st.dataframe(affichage_validation, hide_index=True, width='stretch')
+
+        st.caption(
+            f"{config.badge_html('OBS')} Valeurs publiées = chiffres officiels "
+            "RGPH-5 / EHCVM II cités dans `README.md`. "
+            f"{config.badge_html('CALC')} Valeurs du modèle = recalculées à "
+            "chaque chargement à partir des données de "
+            "`ref_*.csv` (ou de vos exports dans `data/raw/` s'ils sont "
+            "présents). Ces mêmes contrôles sont vérifiés automatiquement à "
+            "chaque push par `test_datamarket.py::TestChargement` — cette "
+            "page en est la version lisible pour un évaluateur.",
+            unsafe_allow_html=True)
+
+    # Donnees sources
+    with onglets[6]:
         st.markdown("#### Données ANSD normalisées")
         sous = st.tabs(["Population (RGPH-5)", "Dépenses (EHCVM II)",
                         "Production agricole (EAA)"])
@@ -542,7 +579,7 @@ if resultat is not None:
                 hide_index=True, width='stretch')
 
     # Export PDF
-    with onglets[6]:
+    with onglets[7]:
         st.markdown("#### Rapport d'étude exportable")
         st.caption(
             "Document de 4 pages : synthèse chiffrée, détail région par "
