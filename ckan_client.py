@@ -42,13 +42,40 @@ Utilisation en ligne de commande
     python ckan_client.py extraire <resource_id>    # telecharge en CSV
     python ckan_client.py tout-agricole             # ingestion agricole
 
-AVERTISSEMENT
--------------
-Ce client a ete ecrit sans pouvoir etre execute (environnement d'execution
-indisponible au moment de la redaction). Les endpoints implementes suivent la
-specification CKAN Action API v3, mais **aucun appel reel n'a ete verifie**.
-Lancer `python ckan_client.py explorer` en premier : cette commande est
-concue pour diagnostiquer et signaler precisement ce qui repond ou non.
+ETAT VERIFIE (25 aout 2026)
+---------------------------
+Ce client a d'abord ete ecrit sans pouvoir etre execute, puis reellement
+teste contre les deux portails. Resultats :
+
+  AgriData   Accessible. Un bug bloquait toute connexion Python (le
+             serveur ne renvoie pas son certificat intermediaire
+             GlobalSign — corrige ci-dessous par _bundle_verification()).
+             298 jeux de donnees, 281 ressources interrogeables par API.
+
+             Mais : les 16 jeux "prioritaires" de DATASETS_PRIORITAIRES
+             (population, depenses, production) suivent tous le meme
+             format "fiche indicateur SDR" — une seule ligne, valeurs
+             par annee, malgre des titres qui promettent une ventilation
+             "par region". Un balayage exhaustif des 281 ressources
+             interrogeables (filtre 10-20 lignes, proxy d'une table a une
+             ligne par region) n'a remonte aucune table region x
+             population/depense/production exploitable. Les seules
+             donnees reellement regionales trouvees sont hors-sujet
+             (ex. seuils d'alerte des cours d'eau par station).
+
+             Conclusion : AgriData ne permet pas aujourd'hui de remplacer
+             les estimations regionales de ref_*.csv par des donnees
+             observees. Les jeux prioritaires restent utiles au niveau
+             national (serie longue par indicateur) mais pas au niveau
+             regional attendu par le pipeline.
+
+  ODP        Repond (HTTP 401) mais exige une authentification que ce
+  Regional   projet n'a pas. A revisiter si un acces est obtenu.
+
+Avant de retenter une ingestion automatique, revalider manuellement le
+contenu de chaque jeu vise (`python ckan_client.py dataset <nom>` puis
+inspection des premieres lignes) : le titre d'un jeu sur ce portail ne
+garantit pas sa structure.
 """
 
 from __future__ import annotations
@@ -56,6 +83,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -69,6 +97,47 @@ except ImportError:  # pragma: no cover
     requests = None
 
 import config
+
+# --------------------------------------------------------------------------
+# Chaine de certification
+# --------------------------------------------------------------------------
+# agridata.ansd.sn (nginx) ne renvoie que son certificat feuille, sans
+# l'intermediaire GlobalSign GCC R3 DV TLS CA 2020. Les navigateurs et
+# Windows tolerent cette omission via une recuperation automatique de la
+# chaine (AIA fetching) ; Python/OpenSSL ne le font pas et rejettent la
+# connexion avec « unable to get local issuer certificate ». On complete
+# donc le magasin certifi avec l'intermediaire manquant plutot que de
+# desactiver la verification TLS. Intermediaire recupere une fois pour
+# toutes depuis le point de distribution officiel de l'autorite :
+# http://secure.globalsign.com/cacert/gsgccr3dvtlsca2020.crt
+_CERTS_DIR = Path(__file__).resolve().parent / "certs"
+_bundle_verification_cache: str | None = None
+
+
+def _bundle_verification() -> str:
+    """Chemin d'un bundle CA = certifi + intermediaires manquants du projet."""
+    global _bundle_verification_cache
+    if _bundle_verification_cache:
+        return _bundle_verification_cache
+
+    import certifi
+
+    intermediaires = sorted(_CERTS_DIR.glob("*.pem")) if _CERTS_DIR.is_dir() else []
+    if not intermediaires:
+        _bundle_verification_cache = certifi.where()
+        return _bundle_verification_cache
+
+    cache_dir = Path(tempfile.gettempdir()) / "datamarket_senegal"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    bundle = cache_dir / "ca_bundle_ansd.pem"
+
+    contenu = Path(certifi.where()).read_bytes()
+    for chemin in intermediaires:
+        contenu += b"\n" + chemin.read_bytes()
+    bundle.write_bytes(contenu)
+
+    _bundle_verification_cache = str(bundle)
+    return _bundle_verification_cache
 
 # ==========================================================================
 # Portails connus
@@ -317,6 +386,7 @@ class ClientCkan:
                               "d'intelligence economique, ANSD Hackathon 2026)",
                 "Accept": "application/json",
             })
+            self._session.verify = _bundle_verification()
         return self._session
 
     def _appeler(self, action: str, **parametres) -> object:

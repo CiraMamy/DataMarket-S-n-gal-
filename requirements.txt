@@ -10,6 +10,7 @@ plotly==6.9.0
 folium==0.20.0
 branca==0.8.2
 requests==2.34.2
+certifi==2026.7.22
 reportlab==4.5.1
 
 # Optionnel — module 3 (interface conversationnelle).
