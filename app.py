@@ -176,6 +176,59 @@ if st.session_state.resultat is None:
 
 
 # ==========================================================================
+# Etudes de cas pre-remplies (demo sans risque)
+# ==========================================================================
+# Calculees directement, sans passer par le moteur d'interpretation de
+# phrase (module 3) : le resultat ne depend donc jamais de la reussite
+# d'un parsing NLP. Utile en demonstration ou pour explorer l'outil sans
+# rediger de phrase.
+
+ETUDES_DE_CAS = {
+    "Supérette à Mbour": {
+        "secteur": "commerce_proximite",
+        "regions": ["Thies"],
+        "ville": "Mbour",
+        "budget": 15_000_000,
+        "phrase": "Je veux ouvrir une supérette à Mbour avec 15 millions de budget",
+    },
+    "Transformation de mangue à Ziguinchor": {
+        "secteur": "agrobusiness",
+        "regions": ["Ziguinchor"],
+        "ville": "Ziguinchor",
+        "budget": 35_000_000,
+        "phrase": "Unité de transformation de mangue à Ziguinchor avec 35 millions de budget",
+    },
+    "Restauration santé à Dakar": {
+        "secteur": "restauration_sante",
+        "regions": ["Dakar"],
+        "ville": "Dakar",
+        "budget": 25_000_000,
+        "phrase": "Restaurant pour diabétiques à Dakar avec 25 millions de budget",
+    },
+}
+
+
+def _charger_etude_cas(nom: str) -> None:
+    cas = ETUDES_DE_CAS[nom]
+    resultat = market.calculer(
+        jeu, cas["secteur"], regions=cas["regions"], budget=cas["budget"])
+    intention = nlp_agent.Intention(
+        secteur=cas["secteur"], regions=cas["regions"], ville=cas["ville"],
+        budget=cas["budget"], confiance=1.0, moteur="etude_cas",
+        notes=[f"Étude de cas pré-remplie « {nom} » — calcul direct, "
+               f"sans passer par l'interprétation de phrase."])
+    st.session_state.intention = intention
+    st.session_state.resultat = resultat
+    st.session_state.phrase = cas["phrase"]
+    st.session_state.synthese = nlp_agent.synthese_locale(intention, resultat)
+    _maj_lien_partage(
+        cas["secteur"], cas["regions"],
+        resultat.hypotheses["part_geographique"],
+        resultat.hypotheses["part_marche_visee_saisie"],
+        cas["budget"], cas["phrase"])
+
+
+# ==========================================================================
 # Barre laterale
 # ==========================================================================
 
@@ -256,6 +309,22 @@ st.markdown(
 
 
 # ==========================================================================
+# Etudes de cas pre-remplies
+# ==========================================================================
+
+st.markdown("### Cas types")
+st.caption(
+    "Chargement immédiat, sans dépendre de l'interprétation d'une phrase — "
+    "idéal pour explorer l'outil ou en démonstration.")
+
+colonnes_cas = st.columns(len(ETUDES_DE_CAS))
+for colonne, nom_cas in zip(colonnes_cas, ETUDES_DE_CAS):
+    if colonne.button(nom_cas, width='stretch', key=f"cas_{nom_cas}"):
+        _charger_etude_cas(nom_cas)
+        st.rerun()
+
+
+# ==========================================================================
 # Module 3 - Saisie conversationnelle
 # ==========================================================================
 
@@ -319,6 +388,7 @@ if resultat is not None:
         haut[0].markdown(f"**Interprétation** — {intention.resume()}")
         haut[1].metric("Moteur", {
             "claude": "Claude", "lien": "Lien partagé",
+            "etude_cas": "Étude de cas",
         }.get(intention.moteur, "Local"))
         haut[2].metric("Confiance", f"{intention.confiance:.0%}")
 
