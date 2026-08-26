@@ -9,6 +9,9 @@ Lancement :
 
 from __future__ import annotations
 
+import json
+from datetime import datetime, timezone
+
 import pandas as pd
 import streamlit as st
 
@@ -83,6 +86,93 @@ if "resultat" not in st.session_state:
     st.session_state.intention = None
     st.session_state.phrase = ""
     st.session_state.synthese = None
+
+
+# ==========================================================================
+# Lien permanent partageable (reproductibilite)
+# ==========================================================================
+# Les parametres d'une etude sont encodes dans l'URL. Quiconque ouvre le
+# lien retrouve exactement le meme calcul, sans avoir a re-decrire son
+# projet ni a re-regler les curseurs.
+
+def _maj_lien_partage(secteur: str, regions: list[str], part_geo: float,
+                      part_som: float, budget: float | None,
+                      phrase: str) -> None:
+    st.query_params["secteur"] = secteur
+    st.query_params["regions"] = ",".join(regions) if regions else ""
+    st.query_params["zone"] = f"{part_geo:.4f}"
+    st.query_params["part"] = f"{part_som:.4f}"
+    if budget:
+        st.query_params["budget"] = f"{budget:.0f}"
+    if phrase:
+        st.query_params["phrase"] = phrase
+
+
+def _etude_depuis_lien() -> tuple[nlp_agent.Intention, market.ResultatMarche] | None:
+    qp = st.query_params
+    if "secteur" not in qp or qp["secteur"] not in config.SECTEURS:
+        return None
+    secteur = qp["secteur"]
+    regions = [r for r in qp.get("regions", "").split(",") if r in config.REGIONS]
+    try:
+        part_geo = float(qp["zone"]) if qp.get("zone") else None
+        part_som = float(qp["part"]) if qp.get("part") else None
+        budget = float(qp["budget"]) if qp.get("budget") else None
+    except ValueError:
+        return None
+
+    resultat = market.calculer(
+        jeu, secteur, regions=regions or None,
+        part_geographique=part_geo, part_marche_visee=part_som, budget=budget)
+    intention = nlp_agent.Intention(
+        secteur=secteur, regions=regions, budget=budget,
+        part_geographique=part_geo, part_marche_visee=part_som,
+        confiance=1.0, moteur="lien",
+        notes=["Étude reconstituée depuis un lien partagé."])
+    return intention, resultat
+
+
+def _export_json(resultat: market.ResultatMarche, phrase: str) -> str:
+    """Export complet et reproductible : entrees, hypotheses, sorties."""
+    donnees = {
+        "genere_le": datetime.now(timezone.utc).isoformat(),
+        "entrees": {
+            "phrase_saisie": phrase or None,
+            "secteur": resultat.secteur,
+            "regions": resultat.regions,
+            "budget_fcfa": resultat.hypotheses.get("budget_fcfa"),
+        },
+        "hypotheses": {
+            k: v for k, v in resultat.hypotheses.items()
+            if k not in {"libelle", "description", "poste_depense"}
+        },
+        "provenance": resultat.provenance,
+        "resultats": {
+            "tam_fcfa": resultat.tam,
+            "sam_fcfa": resultat.sam,
+            "som_fcfa": resultat.som,
+            "population_cible": resultat.population_cible,
+            "ca_mensuel_som_fcfa": resultat.ca_mensuel_som,
+        },
+        "avertissements": resultat.avertissements,
+        "detail_regional": resultat.detail_regional.to_dict(orient="records"),
+        "lien_reproductible": {
+            "secteur": resultat.secteur,
+            "regions": ",".join(resultat.regions),
+            "zone": resultat.hypotheses.get("part_geographique"),
+            "part": resultat.hypotheses.get("part_marche_visee_saisie"),
+            "budget": resultat.hypotheses.get("budget_fcfa"),
+        },
+    }
+    return json.dumps(donnees, ensure_ascii=False, indent=2, default=str)
+
+
+if st.session_state.resultat is None:
+    depuis_lien = _etude_depuis_lien()
+    if depuis_lien is not None:
+        st.session_state.intention, st.session_state.resultat = depuis_lien
+        st.session_state.phrase = st.query_params.get("phrase", "")
+        st.session_state.synthese = nlp_agent.synthese_locale(*depuis_lien)
 
 
 # ==========================================================================
@@ -204,6 +294,11 @@ if lancer and phrase.strip():
             nlp_agent.redaction_synthese(intention, resultat)
             if not forcer_local else None
         ) or nlp_agent.synthese_locale(intention, resultat)
+        _maj_lien_partage(
+            resultat.secteur, resultat.regions,
+            resultat.hypotheses["part_geographique"],
+            resultat.hypotheses["part_marche_visee_saisie"],
+            intention.budget, phrase)
 elif lancer:
     st.warning("Saisissez d'abord une description de votre projet.")
 
@@ -222,7 +317,9 @@ if resultat is not None:
     with st.container(border=True):
         haut = st.columns([3, 1, 1])
         haut[0].markdown(f"**Interprétation** — {intention.resume()}")
-        haut[1].metric("Moteur", "Claude" if intention.moteur == "claude" else "Local")
+        haut[1].metric("Moteur", {
+            "claude": "Claude", "lien": "Lien partagé",
+        }.get(intention.moteur, "Local"))
         haut[2].metric("Confiance", f"{intention.confiance:.0%}")
 
         if intention.notes:
@@ -269,6 +366,9 @@ if resultat is not None:
             resultat = st.session_state.resultat
             st.session_state.synthese = nlp_agent.synthese_locale(
                 intention, resultat)
+            _maj_lien_partage(
+                resultat.secteur, resultat.regions, part_geo, part_som,
+                intention.budget, st.session_state.phrase)
             st.rerun()
 
     # ---- Indicateurs cles ----------------------------------------------
@@ -281,6 +381,9 @@ if resultat is not None:
         "sectorielles modifiables (captation, prévalence, part transformée) : "
         "ils héritent donc du classement Hypothèse — voir l'onglet "
         "« Détail régional » pour la liste complète.")
+    st.caption(
+        "🔗 L'adresse de cette page encode les paramètres de l'étude — "
+        "copiez-la pour la partager ou la retrouver plus tard.")
     mesures = st.columns(4)
     mesures[0].metric("TAM — marché total", config.formater_fcfa(resultat.tam))
     mesures[1].metric(
@@ -299,7 +402,7 @@ if resultat is not None:
     onglets = st.tabs([
         "Synthèse", "Carte du potentiel", "Détail régional",
         "Comparateur de territoires", "Comparaison sectorielle",
-        "Validation", "Données sources", "Export PDF",
+        "Validation", "Données sources", "Export",
     ])
 
     # Synthese
@@ -578,7 +681,7 @@ if resultat is not None:
                 prod[["Région"] + [c for c in prod.columns if c.endswith("_t")]],
                 hide_index=True, width='stretch')
 
-    # Export PDF
+    # Export
     with onglets[7]:
         st.markdown("#### Rapport d'étude exportable")
         st.caption(
@@ -606,6 +709,19 @@ if resultat is not None:
                 mime="application/pdf",
                 type="primary",
             )
+
+        st.divider()
+        st.markdown("#### Export reproductible (JSON)")
+        st.caption(
+            "Entrées, hypothèses, provenance et sorties du calcul en un seul "
+            "fichier — de quoi rejouer ou auditer les chiffres sans repasser "
+            "par l'interface.")
+        st.download_button(
+            "Télécharger le calcul complet (JSON)",
+            _export_json(resultat, st.session_state.phrase),
+            file_name=f"etude_{resultat.secteur}.json",
+            mime="application/json",
+        )
 
 else:
     # ---- Ecran d'accueil ------------------------------------------------
