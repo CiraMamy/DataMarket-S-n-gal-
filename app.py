@@ -468,6 +468,56 @@ if resultat is not None:
     for avertissement in resultat.avertissements:
         st.warning(avertissement, icon="⚠️")
 
+    # ---- Analyse de sensibilite -----------------------------------------
+    with st.expander("📐 Intervalle de confiance et analyse de sensibilité",
+                     expanded=False):
+        coefficients = market.coefficients_sensibles(resultat.secteur)
+        st.caption(
+            f"{config.badge_html('HYP')} Fait varier le(s) coefficient(s) de "
+            f"modélisation les plus incertains du secteur — "
+            f"**{', '.join(c.replace('_', ' ') for c in coefficients)}** — "
+            "en laissant les autres hypothèses (zone de chalandise, part de "
+            "marché visée, budget) fixées à la valeur choisie ci-dessus. Ce "
+            "n'est pas une marge arbitraire appliquée au TAM.",
+            unsafe_allow_html=True)
+
+        marge = st.slider(
+            "Marge d'incertitude sur les hypothèses clés (± %)",
+            5, 50, 20, step=5) / 100
+
+        intervalle = market.fourchette(
+            jeu, resultat.secteur, regions=resultat.regions,
+            part_geographique=resultat.hypotheses["part_geographique"],
+            part_marche_visee=resultat.hypotheses["part_marche_visee_saisie"],
+            budget=resultat.hypotheses.get("budget_fcfa"),
+            marge=marge)
+
+        st.plotly_chart(
+            dashboard.graphique_fourchette(intervalle, resultat.libelle),
+            width='stretch')
+
+        colonnes_fourchette = st.columns(3)
+        colonnes_fourchette[0].metric(
+            "TAM bas", config.formater_fcfa(intervalle["tam"]["bas"]))
+        colonnes_fourchette[1].metric(
+            "TAM central", config.formater_fcfa(intervalle["tam"]["central"]))
+        colonnes_fourchette[2].metric(
+            "TAM haut", config.formater_fcfa(intervalle["tam"]["haut"]))
+
+        colonnes_fourchette_som = st.columns(3)
+        colonnes_fourchette_som[0].metric(
+            "SOM bas", config.formater_fcfa(intervalle["som"]["bas"]))
+        colonnes_fourchette_som[1].metric(
+            "SOM central", config.formater_fcfa(intervalle["som"]["central"]))
+        colonnes_fourchette_som[2].metric(
+            "SOM haut", config.formater_fcfa(intervalle["som"]["haut"]))
+
+        if intervalle["som"]["bas"] == intervalle["som"]["haut"]:
+            st.caption(
+                "Bas = haut ici : le gisement de matière première régionale "
+                "est le facteur limitant sur ce périmètre, pas la demande — "
+                "faire varier la part transformée n'a alors aucun effet.")
+
     # ---- Onglets --------------------------------------------------------
     onglets = st.tabs([
         "Synthèse", "Carte du potentiel", "Détail régional",

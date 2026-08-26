@@ -211,6 +211,16 @@ _MOTEURS = {
     "agrobusiness": _tam_agrobusiness,
 }
 
+# Coefficients HYP les plus incertains de chaque secteur (cf. config.SECTEURS
+# et DATA_MAPPING.md) : ce sont eux qui font l'objet de l'analyse de
+# sensibilite, plutot qu'une marge arbitraire appliquee au TAM lui-meme.
+_COEFFICIENTS_SENSIBLES = {
+    "commerce_proximite": ["captation_urbain", "captation_rural"],
+    "restauration_sante": ["prevalence_diabete", "prevalence_prediabete",
+                           "coefficient_solvabilite"],
+    "agrobusiness": ["part_produits_transformes"],
+}
+
 
 # ==========================================================================
 # Calcul principal
@@ -223,6 +233,7 @@ def calculer(
     part_geographique: float | None = None,
     part_marche_visee: float | None = None,
     budget: float | None = None,
+    facteur_sensibilite: float = 1.0,
 ) -> ResultatMarche:
     """
     Calcule TAM / SAM / SOM pour un secteur et un perimetre donnes.
@@ -244,6 +255,11 @@ def calculer(
         Capital disponible en FCFA. S'il est renseigne, il module la part
         de marche atteignable (un budget inferieur au capex minimal reduit
         proportionnellement l'ambition).
+    facteur_sensibilite : float
+        Multiplie le(s) coefficient(s) HYP les plus incertains du secteur
+        (_COEFFICIENTS_SENSIBLES). 1.0 = valeurs de reference. Utilise par
+        fourchette() pour produire un TAM bas/central/haut ; n'a aucun
+        effet sur les autres hypotheses (zone de chalandise, part visee).
 
     Retourne
     --------
@@ -256,6 +272,11 @@ def calculer(
         )
 
     p = dict(config.SECTEURS[secteur])
+    if facteur_sensibilite != 1.0:
+        for cle in _COEFFICIENTS_SENSIBLES.get(secteur, []):
+            if cle in p:
+                p[cle] = min(max(p[cle] * facteur_sensibilite, 0.0), 1.0)
+
     regions = list(regions) if regions else list(config.REGIONS)
     regions = [r for r in regions if r in config.REGIONS]
     if not regions:
@@ -367,6 +388,51 @@ def calculer(
         avertissements=avertissements,
         provenance=provenance,
     )
+
+
+# ==========================================================================
+# Intervalle de confiance (analyse de sensibilite)
+# ==========================================================================
+
+def coefficients_sensibles(secteur: str) -> list[str]:
+    """Noms des coefficients HYP varies par fourchette() pour ce secteur."""
+    return list(_COEFFICIENTS_SENSIBLES.get(secteur, []))
+
+
+def fourchette(
+    jeu: JeuDeDonnees,
+    secteur: str,
+    regions: list[str] | None = None,
+    part_geographique: float | None = None,
+    part_marche_visee: float | None = None,
+    budget: float | None = None,
+    marge: float = 0.20,
+) -> dict:
+    """
+    TAM / SAM / SOM bas-central-haut, en faisant varier de +/- `marge` le(s)
+    coefficient(s) HYP les plus incertains du secteur (_COEFFICIENTS_SENSIBLES)
+    -- pas une marge arbitraire appliquee au TAM lui-meme. Les autres
+    hypotheses (zone de chalandise, part de marche visee, budget) restent
+    figees a la valeur centrale : seule l'incertitude de modelisation
+    proprement dite est representee.
+
+    Pour l'agrobusiness, le TAM est borne par le gisement de matiere
+    premiere regionale (cf. _tam_agrobusiness) : dans une region ou ce
+    gisement est le facteur limitant, bas = central = haut, ce qui est le
+    comportement attendu, pas un defaut.
+    """
+    args = (jeu, secteur, regions, part_geographique, part_marche_visee, budget)
+    central = calculer(*args, facteur_sensibilite=1.0)
+    bas = calculer(*args, facteur_sensibilite=1.0 - marge)
+    haut = calculer(*args, facteur_sensibilite=1.0 + marge)
+
+    return {
+        "marge": marge,
+        "coefficients_varies": _COEFFICIENTS_SENSIBLES.get(secteur, []),
+        "tam": {"bas": bas.tam, "central": central.tam, "haut": haut.tam},
+        "sam": {"bas": bas.sam, "central": central.sam, "haut": haut.sam},
+        "som": {"bas": bas.som, "central": central.som, "haut": haut.som},
+    }
 
 
 # ==========================================================================

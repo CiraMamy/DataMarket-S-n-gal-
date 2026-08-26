@@ -9,6 +9,7 @@ MODULE 4 (partie visualisation) - Cartes et graphiques
   graphique_secteurs()     Comparaison des trois secteurs.
   graphique_structure()    Population cible vs depense par tete.
   graphique_comparaison_territoires()  Deux regions cote a cote.
+  graphique_fourchette()   Intervalle de confiance TAM/SOM bas-central-haut.
 """
 
 from __future__ import annotations
@@ -285,6 +286,50 @@ def graphique_structure(potentiel: pd.DataFrame) -> go.Figure:
     )
     figure.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.06)")
     figure.update_yaxes(showgrid=True, gridcolor="rgba(0,0,0,0.06)")
+    return figure
+
+
+def graphique_fourchette(fourchette: dict, libelle_secteur: str) -> go.Figure:
+    """
+    Barres flottantes bas -> haut pour TAM et SOM, avec marqueur central.
+    Rend visible l'analyse de sensibilite produite par market.fourchette().
+    """
+    lignes = [("TAM", fourchette["tam"]), ("SOM", fourchette["som"])]
+    figure = go.Figure()
+
+    for indicateur, valeurs in lignes:
+        bas, centre, haut = valeurs["bas"], valeurs["central"], valeurs["haut"]
+        figure.add_trace(go.Scatter(
+            x=[bas, haut], y=[indicateur, indicateur],
+            mode="lines", line=dict(color="#B7D9BE", width=16),
+            showlegend=False, hoverinfo="skip",
+        ))
+        figure.add_trace(go.Scatter(
+            x=[centre], y=[indicateur], mode="markers",
+            marker=dict(color="#00441B", size=16, symbol="diamond"),
+            showlegend=False,
+            hovertemplate=(
+                f"<b>{indicateur}</b><br>"
+                f"Bas : {config.formater_fcfa(bas)}<br>"
+                f"Central : {config.formater_fcfa(centre)}<br>"
+                f"Haut : {config.formater_fcfa(haut)}<extra></extra>"
+            ),
+        ))
+        for x, texte in ((bas, config.formater_fcfa(bas)),
+                        (haut, config.formater_fcfa(haut))):
+            figure.add_annotation(
+                x=x, y=indicateur, text=texte, showarrow=False,
+                yshift=18, font=dict(size=11, color="#555"))
+
+    figure.update_layout(
+        title=(f"Fourchette TAM / SOM — {libelle_secteur} "
+              f"(± {fourchette['marge']:.0%} sur les hypothèses clés)"),
+        xaxis_title="FCFA / an",
+        height=260,
+        **_MISE_EN_PAGE,
+    )
+    figure.update_xaxes(showgrid=True, gridcolor="rgba(0,0,0,0.06)")
+    figure.update_yaxes(showgrid=False)
     return figure
 
 
