@@ -309,6 +309,44 @@ st.markdown(
 
 
 # ==========================================================================
+# Impact & methode
+# ==========================================================================
+
+with st.expander("📋 Impact & méthode — à lire avant de commencer"):
+    imp_g, imp_d = st.columns(2)
+    with imp_g:
+        st.markdown(
+            "**Problème**\n\n"
+            "Un entrepreneur sénégalais qui veut ouvrir une supérette, un "
+            "restaurant ou une unité de transformation n'a aujourd'hui "
+            "aucun moyen simple de chiffrer son marché : les données "
+            "existent (ANSD) mais sont dispersées, techniques, et jamais "
+            "reliées à une question concrète comme « combien de clients à "
+            "Mbour ? ».")
+        st.markdown(
+            "**Données**\n\n"
+            "RGPH-5 (2023), EHCVM II (2021-2022), EAA/DAPSA. Chaque valeur "
+            "affichée porte un badge de provenance — OBS observé, EST "
+            "estimé, HYP hypothèse — voir la légende dans la barre "
+            "latérale.")
+    with imp_d:
+        st.markdown(
+            "**Méthode**\n\n"
+            "TAM = population cible × dépense annuelle sur le poste "
+            "adressé. SAM = TAM × zone de chalandise réelle. SOM = SAM × "
+            "part de marché visée à 3 ans, ajustée selon le budget "
+            "disponible. Chaque coefficient est affiché et modifiable, "
+            "jamais une boîte noire.")
+        st.markdown(
+            "**Limites assumées**\n\n"
+            "Les dépenses par tête sont des moyennes régionales qui "
+            "masquent des écarts de revenu. Le SOM ne modélise pas la "
+            "concurrence de rue. Les données EHCVM datent de 2021-2022 "
+            "(francs courants). Voir l'onglet *Validation* pour la "
+            "calibration face à des chiffres publiés.")
+
+
+# ==========================================================================
 # Etudes de cas pre-remplies
 # ==========================================================================
 
@@ -413,6 +451,10 @@ if resultat is not None:
             default=intention.regions,
             format_func=lambda r: config.REGIONS_AFFICHAGE.get(r, r),
         )
+        if not regions_choisies:
+            st.caption(
+                "⚠️ Aucune région sélectionnée : le recalcul portera sur "
+                "les 14 régions (national).")
         part_geo = ajuste[2].slider(
             "Zone de chalandise (% de la région)",
             0.5, 100.0,

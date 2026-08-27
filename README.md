@@ -166,6 +166,22 @@ Couvre notamment :
 
 ---
 
+## Mode hors-ligne
+
+Le calculateur TAM/SAM/SOM (modules 1 et 2) ne fait **aucun appel réseau** :
+`ref_*.csv` est lu depuis le disque, sans dépendance externe. Vérifié en
+simulant une coupure réseau totale (requêtes HTTP interceptées) :
+l'application démarre et produit une étude complète sans exception.
+
+Seule la carte (module 4) sollicite le réseau, à la marge, pour télécharger
+les frontières régionales au premier lancement. Sa stratégie à trois niveaux
+— cache local → téléchargement geoBoundaries → repli en pastilles
+proportionnelles — a elle aussi été vérifiée hors-ligne : sans cache ni
+réseau, l'application reste pleinement fonctionnelle, avec une carte
+dégradée mais honnête sur son état (message affiché à l'utilisateur).
+
+---
+
 ## Sources et statut des données
 
 | Source | Usage | Millésime |

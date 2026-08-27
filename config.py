@@ -283,7 +283,7 @@ PROVENANCE = {
     "EXT": {"label": "EXT", "titre": "Donnée externe, hors ANSD",
             "bg": "#F5F5F5", "bordure": "#999999", "texte": "#555555"},
     "ND": {"label": "N/D", "titre": "Donnée non disponible dans les sources intégrées",
-           "bg": "#F0F0F0", "bordure": "#CCCCCC", "texte": "#888888"},
+           "bg": "#F0F0F0", "bordure": "#CCCCCC", "texte": "#666666"},
 }
 
 
