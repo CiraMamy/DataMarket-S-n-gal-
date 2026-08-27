@@ -518,6 +518,70 @@ if resultat is not None:
                 "est le facteur limitant sur ce périmètre, pas la demande — "
                 "faire varier la part transformée n'a alors aucun effet.")
 
+    # ---- Decision d'investissement ---------------------------------------
+    with st.expander("💰 Décision d'investissement", expanded=False):
+        capex_min = resultat.hypotheses.get("capex_min_fcfa", 0)
+        st.markdown(
+            f"{config.badge_html('HYP')} Capital minimal observé pour ce "
+            f"secteur : **{config.formater_fcfa(capex_min)}**.",
+            unsafe_allow_html=True)
+
+        marge_nette = st.slider(
+            "Marge nette estimée (%)",
+            1, 40, 10, step=1,
+            help="Hypothèse à régler vous-même selon votre connaissance du "
+                 "secteur — ce n'est pas une donnée ANSD. Marge nette = "
+                 "profit après toutes charges, en % du chiffre d'affaires.",
+        ) / 100
+        st.caption(
+            f"{config.badge_html('HYP')} Hypothèse saisie par vous, "
+            "non issue des données ANSD.", unsafe_allow_html=True)
+
+        ca_mensuel = resultat.ca_mensuel_som
+        profit_mensuel = ca_mensuel * marge_nette
+
+        colonnes_decision = st.columns(3)
+        colonnes_decision[0].metric(
+            "CA mensuel visé", config.formater_fcfa(ca_mensuel))
+        colonnes_decision[1].metric(
+            "Profit mensuel estimé", config.formater_fcfa(profit_mensuel))
+
+        if profit_mensuel > 0 and capex_min > 0:
+            mois = capex_min / profit_mensuel
+            if mois < 1:
+                texte_delai = f"{mois * 30:.0f} jours"
+            elif mois < 24:
+                texte_delai = f"{mois:.0f} mois"
+            else:
+                texte_delai = f"{mois / 12:.1f} ans"
+            colonnes_decision[2].metric("Délai d'amortissement", texte_delai)
+            if mois > 60:
+                st.warning(
+                    "Délai d'amortissement supérieur à 5 ans : ce plan n'est "
+                    "probablement pas viable en l'état — reconsidérez le "
+                    "budget, la marge visée ou l'ambition de part de marché "
+                    "(SOM).", icon="⚠️")
+        else:
+            colonnes_decision[2].metric("Délai d'amortissement", "n/d")
+            st.warning(
+                "Le chiffre d'affaires visé ne génère aucun profit positif "
+                "avec cette marge : le capital ne serait jamais amorti selon "
+                "ce plan.", icon="⚠️")
+
+        if intention.budget:
+            ecart_budget = intention.budget - capex_min
+            if ecart_budget < 0:
+                st.caption(
+                    f"Votre budget ({config.formater_fcfa(intention.budget)}) "
+                    f"est inférieur de {config.formater_fcfa(abs(ecart_budget))} "
+                    "au capital minimal observé — le SOM a déjà été réduit en "
+                    "conséquence (voir les avertissements ci-dessus).")
+            else:
+                st.caption(
+                    f"Votre budget ({config.formater_fcfa(intention.budget)}) "
+                    "couvre le capital minimal observé, avec une marge de "
+                    f"{config.formater_fcfa(ecart_budget)}.")
+
     # ---- Onglets --------------------------------------------------------
     onglets = st.tabs([
         "Synthèse", "Carte du potentiel", "Détail régional",
