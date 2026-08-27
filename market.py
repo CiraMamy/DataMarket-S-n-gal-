@@ -469,13 +469,14 @@ def potentiel_par_region(jeu: JeuDeDonnees, secteur: str) -> pd.DataFrame:
 
 
 def comparer_secteurs(jeu: JeuDeDonnees,
-                      regions: list[str] | None = None) -> pd.DataFrame:
+                      regions: list[str] | None = None,
+                      lang: str = "fr") -> pd.DataFrame:
     """Compare les trois secteurs sur un meme perimetre geographique."""
     lignes = []
     for cle in config.SECTEURS:
         r = calculer(jeu, cle, regions=regions)
         lignes.append({
-            "Secteur": r.libelle,
+            "Secteur": config.libelle_secteur(cle, lang),
             "TAM (FCFA)": r.tam,
             "SAM (FCFA)": r.sam,
             "SOM (FCFA)": r.som,

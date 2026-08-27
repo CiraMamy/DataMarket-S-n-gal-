@@ -22,6 +22,7 @@ import plotly.graph_objects as go
 
 import config
 from geo import Geographie
+from i18n import t
 from market import ResultatMarche
 
 
@@ -30,13 +31,15 @@ from market import ResultatMarche
 # ==========================================================================
 
 def carte_potentiel(potentiel: pd.DataFrame, geo: Geographie,
-                    titre_metrique: str = "Potentiel de marché") -> folium.Map:
+                    titre_metrique: str | None = None,
+                    lang: str = "fr") -> folium.Map:
     """
     Carte Leaflet (via folium) des 14 regions.
 
     - Si les polygones sont disponibles : choroplethe continue.
     - Sinon : pastilles proportionnelles sur les chefs-lieux.
     """
+    titre_metrique = titre_metrique or t("map_titre_potentiel", lang)
     carte = folium.Map(
         location=[14.45, -14.45],
         zoom_start=7,
@@ -95,8 +98,11 @@ def carte_potentiel(potentiel: pd.DataFrame, geo: Geographie,
             tooltip=folium.GeoJsonTooltip(
                 fields=["region_affichage", "rang", "score", "tam",
                         "population", "tam_habitant"],
-                aliases=["Région", "Rang", "Score", "TAM annuel",
-                         "Population", "TAM / habitant"],
+                aliases=[t("col_region", lang), t("col_rang", lang),
+                        t("chart_score_label", lang),
+                        t("map_tam_annuel", lang),
+                        t("indicateur_population", lang),
+                        t("indicateur_tam_habitant", lang)],
                 localize=True,
                 sticky=True,
                 style=(
@@ -125,10 +131,10 @@ def carte_potentiel(potentiel: pd.DataFrame, geo: Geographie,
                 fill_opacity=0.85,
                 tooltip=folium.Tooltip(
                     f"<b>{config.REGIONS_AFFICHAGE.get(region, region)}</b><br>"
-                    f"Rang : #{int(ligne['rang'])}<br>"
-                    f"Score : {ligne['score_potentiel']:.1f} / 100<br>"
-                    f"TAM : {config.formater_fcfa(ligne['tam_region'])}<br>"
-                    f"Population : {config.formater_nombre(ligne['population'])}"
+                    f"{t('col_rang', lang)} : #{int(ligne['rang'])}<br>"
+                    f"{t('chart_score_label', lang)} : {ligne['score_potentiel']:.1f} / 100<br>"
+                    f"{t('col_tam', lang)} : {config.formater_fcfa(ligne['tam_region'])}<br>"
+                    f"{t('indicateur_population', lang)} : {config.formater_nombre(ligne['population'])}"
                 ),
             ).add_to(carte)
 
@@ -157,7 +163,8 @@ _MISE_EN_PAGE = dict(
 )
 
 
-def graphique_tam_regions(potentiel: pd.DataFrame, n: int = 14) -> go.Figure:
+def graphique_tam_regions(potentiel: pd.DataFrame, n: int = 14,
+                          lang: str = "fr") -> go.Figure:
     """Barres horizontales du TAM annuel par region."""
     df = potentiel.nlargest(n, "tam_region").sort_values("tam_region")
 
@@ -182,8 +189,8 @@ def graphique_tam_regions(potentiel: pd.DataFrame, n: int = 14) -> go.Figure:
         )
     )
     figure.update_layout(
-        title="Marché total adressable (TAM) par région",
-        xaxis_title="TAM annuel (FCFA)",
+        title=t("chart_tam_region_titre", lang),
+        xaxis_title=t("chart_tam_annuel_axis", lang),
         yaxis_title=None,
         height=max(420, 32 * len(df)),
         **_MISE_EN_PAGE,
@@ -192,13 +199,12 @@ def graphique_tam_regions(potentiel: pd.DataFrame, n: int = 14) -> go.Figure:
     return figure
 
 
-def graphique_entonnoir(resultat: ResultatMarche) -> go.Figure:
+def graphique_entonnoir(resultat: ResultatMarche, lang: str = "fr") -> go.Figure:
     """Entonnoir TAM -> SAM -> SOM."""
     figure = go.Figure(
         go.Funnel(
-            y=["TAM<br><i>marché total</i>",
-               "SAM<br><i>marché accessible</i>",
-               "SOM<br><i>captable à 3 ans</i>"],
+            y=[t("chart_tam_label", lang), t("chart_sam_label", lang),
+               t("chart_som_label", lang)],
             x=[resultat.tam, resultat.sam, resultat.som],
             textposition="inside",
             textinfo="value+percent initial",
@@ -212,14 +218,15 @@ def graphique_entonnoir(resultat: ResultatMarche) -> go.Figure:
         )
     )
     figure.update_layout(
-        title=f"Entonnoir de marché — {resultat.libelle}",
+        title=t("chart_entonnoir_titre", lang,
+               secteur=config.libelle_secteur(resultat.secteur, lang)),
         height=430,
         **_MISE_EN_PAGE,
     )
     return figure
 
 
-def graphique_secteurs(comparaison: pd.DataFrame) -> go.Figure:
+def graphique_secteurs(comparaison: pd.DataFrame, lang: str = "fr") -> go.Figure:
     """Comparaison TAM / SAM / SOM des trois secteurs."""
     figure = go.Figure()
     couleurs = {"TAM (FCFA)": "#00441B", "SAM (FCFA)": "#41AB5D",
@@ -238,9 +245,9 @@ def graphique_secteurs(comparaison: pd.DataFrame) -> go.Figure:
         )
 
     figure.update_layout(
-        title="Comparaison des trois secteurs sur le périmètre retenu",
+        title=t("chart_comparaison_secteurs_titre", lang),
         barmode="group",
-        yaxis_title="FCFA par an",
+        yaxis_title=t("chart_fcfa_an_axis", lang),
         yaxis_type="log",
         height=460,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
@@ -250,7 +257,7 @@ def graphique_secteurs(comparaison: pd.DataFrame) -> go.Figure:
     return figure
 
 
-def graphique_structure(potentiel: pd.DataFrame) -> go.Figure:
+def graphique_structure(potentiel: pd.DataFrame, lang: str = "fr") -> go.Figure:
     """
     Nuage de points : population cible (volume) contre depense par tete
     (intensite). Fait apparaitre les marches de volume et les marches de valeur.
@@ -266,9 +273,9 @@ def graphique_structure(potentiel: pd.DataFrame) -> go.Figure:
         color_continuous_scale=[[0, "#C7E9C0"], [0.5, "#41AB5D"], [1, "#00441B"]],
         size_max=60,
         labels={
-            "population_cible": "Population cible (habitants)",
-            "depense_cible_tete": "Dépense annuelle par tête sur le poste (FCFA)",
-            "score_potentiel": "Score",
+            "population_cible": t("chart_population_cible_axis", lang),
+            "depense_cible_tete": t("chart_depense_tete_axis", lang),
+            "score_potentiel": t("chart_score_label", lang),
         },
     )
     figure.update_traces(
@@ -280,7 +287,7 @@ def graphique_structure(potentiel: pd.DataFrame) -> go.Figure:
         ),
     )
     figure.update_layout(
-        title="Volume contre valeur : structure du marché par région",
+        title=t("chart_structure_titre", lang),
         height=520,
         **_MISE_EN_PAGE,
     )
@@ -289,11 +296,17 @@ def graphique_structure(potentiel: pd.DataFrame) -> go.Figure:
     return figure
 
 
-def graphique_fourchette(fourchette: dict, libelle_secteur: str) -> go.Figure:
+def graphique_fourchette(fourchette: dict, libelle_secteur: str,
+                         lang: str = "fr") -> go.Figure:
     """
     Barres flottantes bas -> haut pour TAM et SOM, avec marqueur central.
     Rend visible l'analyse de sensibilite produite par market.fourchette().
     """
+    mots_bas_central_haut = {
+        "fr": ("Bas", "Central", "Haut"), "en": ("Low", "Central", "High"),
+    }.get(lang, ("Bas", "Central", "Haut"))
+    mot_bas, mot_central, mot_haut = mots_bas_central_haut
+
     lignes = [("TAM", fourchette["tam"]), ("SOM", fourchette["som"])]
     figure = go.Figure()
 
@@ -310,9 +323,9 @@ def graphique_fourchette(fourchette: dict, libelle_secteur: str) -> go.Figure:
             showlegend=False,
             hovertemplate=(
                 f"<b>{indicateur}</b><br>"
-                f"Bas : {config.formater_fcfa(bas)}<br>"
-                f"Central : {config.formater_fcfa(centre)}<br>"
-                f"Haut : {config.formater_fcfa(haut)}<extra></extra>"
+                f"{mot_bas} : {config.formater_fcfa(bas)}<br>"
+                f"{mot_central} : {config.formater_fcfa(centre)}<br>"
+                f"{mot_haut} : {config.formater_fcfa(haut)}<extra></extra>"
             ),
         ))
         for x, texte in ((bas, config.formater_fcfa(bas)),
@@ -322,9 +335,9 @@ def graphique_fourchette(fourchette: dict, libelle_secteur: str) -> go.Figure:
                 yshift=18, font=dict(size=11, color="#555"))
 
     figure.update_layout(
-        title=(f"Fourchette TAM / SOM — {libelle_secteur} "
-              f"(± {fourchette['marge']:.0%} sur les hypothèses clés)"),
-        xaxis_title="FCFA / an",
+        title=t("chart_fourchette_titre", lang, secteur=libelle_secteur,
+               marge=f"{fourchette['marge']:.0%}"),
+        xaxis_title=t("chart_fcfa_an_axis", lang),
         height=260,
         **_MISE_EN_PAGE,
     )
@@ -336,6 +349,7 @@ def graphique_fourchette(fourchette: dict, libelle_secteur: str) -> go.Figure:
 def graphique_comparaison_territoires(
     ligne_a: pd.Series, ligne_b: pd.Series,
     libelle_a: str, libelle_b: str, titre_secteur: str,
+    lang: str = "fr",
 ) -> go.Figure:
     """
     Barres groupees horizontales comparant deux territoires sur plusieurs
@@ -344,10 +358,10 @@ def graphique_comparaison_territoires(
     territoires, pour rendre les echelles comparables sur un meme graphique.
     """
     indicateurs = [
-        ("Population", "population", config.formater_nombre),
-        ("TAM", "tam_region", config.formater_fcfa),
-        ("TAM / habitant", "tam_par_habitant", config.formater_fcfa),
-        ("Score de potentiel", "score_potentiel", lambda v: f"{v:.1f} / 100"),
+        (t("indicateur_population", lang), "population", config.formater_nombre),
+        (t("col_tam", lang), "tam_region", config.formater_fcfa),
+        (t("indicateur_tam_habitant", lang), "tam_par_habitant", config.formater_fcfa),
+        (t("indicateur_score", lang), "score_potentiel", lambda v: f"{v:.1f} / 100"),
     ]
     noms, valeurs_a, valeurs_b, texte_a, texte_b = [], [], [], [], []
     for label, cle, fmt in indicateurs:
@@ -372,9 +386,10 @@ def graphique_comparaison_territoires(
         hovertemplate="<b>%{y}</b><br>%{text}<extra></extra>",
     ))
     figure.update_layout(
-        title=f"{libelle_a} contre {libelle_b} — {titre_secteur}",
+        title=t("chart_comparaison_territoires_titre", lang,
+               a=libelle_a, b=libelle_b, secteur=titre_secteur),
         barmode="group",
-        xaxis_title="Indice relatif (100 = valeur la plus élevée des deux territoires)",
+        xaxis_title=t("chart_indice_relatif_axis", lang),
         height=380,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
         **_MISE_EN_PAGE,
@@ -383,14 +398,14 @@ def graphique_comparaison_territoires(
     return figure
 
 
-def graphique_production(production: pd.DataFrame) -> go.Figure:
+def graphique_production(production: pd.DataFrame, lang: str = "fr") -> go.Figure:
     """Barres empilees de la production agricole par region et par culture."""
     cultures = {
-        "arachide_t": "Arachide",
-        "mil_sorgho_t": "Mil / sorgho",
-        "riz_paddy_t": "Riz paddy",
-        "mais_t": "Maïs",
-        "horticulture_t": "Horticulture",
+        "arachide_t": t("chart_culture_arachide", lang),
+        "mil_sorgho_t": t("chart_culture_mil_sorgho", lang),
+        "riz_paddy_t": t("chart_culture_riz", lang),
+        "mais_t": t("chart_culture_mais", lang),
+        "horticulture_t": t("chart_culture_horticulture", lang),
     }
     df = production.copy()
     df["region_affichage"] = df["region"].map(

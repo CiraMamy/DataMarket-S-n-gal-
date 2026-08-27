@@ -597,47 +597,41 @@ fournis sans en recalculer aucun. Maximum 300 mots au total."""
         return None
 
 
-def synthese_locale(intention: Intention, resultat: ResultatMarche) -> str:
+def synthese_locale(intention: Intention, resultat: ResultatMarche,
+                    lang: str = "fr") -> str:
     """Synthese factuelle construite sans appel API."""
+    from i18n import t
+
     detail = resultat.detail_regional
     tete = detail.iloc[0] if len(detail) else None
     part_sam = 100 * resultat.sam / resultat.tam if resultat.tam else 0
     part_som = 100 * resultat.som / resultat.tam if resultat.tam else 0
+    secteur_libelle = config.libelle_secteur(resultat.secteur, lang)
 
     lignes = [
-        f"Sur le périmètre « {resultat.perimetre} », le marché total adressable "
-        f"pour l'activité « {resultat.libelle} » s'élève à "
-        f"{config.formater_fcfa(resultat.tam)} par an, pour une population cible "
-        f"de {config.formater_nombre(resultat.population_cible)} personnes.",
-        f"Compte tenu de la zone de chalandise retenue, le marché réellement "
-        f"accessible (SAM) représente {config.formater_fcfa(resultat.sam)}, soit "
-        f"{part_sam:.1f} % du TAM. L'objectif de capture à trois ans (SOM) est de "
-        f"{config.formater_fcfa(resultat.som)} ({part_som:.2f} % du TAM), "
-        f"soit un chiffre d'affaires mensuel de "
-        f"{config.formater_fcfa(resultat.ca_mensuel_som)}.",
+        t("synth_ligne1", lang, perimetre=resultat.perimetre,
+          secteur=secteur_libelle, tam=config.formater_fcfa(resultat.tam),
+          population=config.formater_nombre(resultat.population_cible)),
+        t("synth_ligne2", lang, sam=config.formater_fcfa(resultat.sam),
+          part_sam=f"{part_sam:.1f}", som=config.formater_fcfa(resultat.som),
+          part_som=f"{part_som:.2f}",
+          ca_mensuel=config.formater_fcfa(resultat.ca_mensuel_som)),
     ]
 
     transactions = resultat.clients_potentiels()
     if transactions:
         ticket = resultat.hypotheses.get("ticket_moyen_fcfa", 0)
-        lignes.append(
-            f"À un panier moyen de {config.formater_fcfa(ticket)}, cet objectif "
-            f"correspond à environ {config.formater_nombre(transactions / 365)} "
-            f"transactions par jour."
-        )
+        lignes.append(t(
+            "synth_transactions", lang, ticket=config.formater_fcfa(ticket),
+            transactions=config.formater_nombre(transactions / 365)))
 
     if tete is not None and len(detail) > 1:
-        lignes.append(
-            f"La région la plus porteuse du périmètre est "
-            f"{config.REGIONS_AFFICHAGE.get(tete.region, tete.region)}, qui "
-            f"concentre {tete.part_tam_pct:.1f} % du marché adressable."
-        )
+        lignes.append(t(
+            "synth_region_porteuse", lang,
+            region=config.REGIONS_AFFICHAGE.get(tete.region, tete.region),
+            part=f"{tete.part_tam_pct:.1f}"))
 
-    lignes.append(
-        "Ces montants sont des ordres de grandeur dérivés de moyennes régionales "
-        "publiées par l'ANSD. Ils ne remplacent pas une étude terrain sur la "
-        "concurrence locale, l'emplacement et les prix pratiqués."
-    )
+    lignes.append(t("synth_avertissement_final", lang))
     return "\n\n".join(lignes)
 
 

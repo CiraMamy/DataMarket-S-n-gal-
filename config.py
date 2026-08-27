@@ -165,12 +165,19 @@ VILLES_VERS_REGION = {
 SECTEURS = {
     "commerce_proximite": {
         "libelle": "Commerce de proximité (supérette, boutique)",
+        "libelle_en": "Corner store (supermarket, shop)",
         "poste_depense": "part_alimentation_pct",
         "description": (
             "Vente au detail de produits alimentaires et d'entretien. "
             "Cible : ensemble des menages, avec une captation plus forte "
             "en milieu urbain (circuits modernes) qu'en milieu rural "
             "(autoconsommation et marches hebdomadaires)."
+        ),
+        "description_en": (
+            "Retail of food and household products. Target: all "
+            "households, with stronger capture in urban areas (modern "
+            "retail) than in rural areas (self-consumption and weekly "
+            "markets)."
         ),
         "captation_urbain": 0.55,
         "captation_rural": 0.30,
@@ -185,12 +192,19 @@ SECTEURS = {
     },
     "restauration_sante": {
         "libelle": "Restauration santé / diabète",
+        "libelle_en": "Health-focused catering / diabetes",
         "poste_depense": "part_alimentation_pct",
         "description": (
             "Restauration et plats prepares a indice glycemique maitrise. "
             "Cible : adultes de 25 ans et plus vivant en milieu urbain et "
             "concernes par le diabete ou l'hyperglycemie moderee, avec un "
             "pouvoir d'achat permettant la restauration hors domicile."
+        ),
+        "description_en": (
+            "Catering and prepared meals with controlled glycemic index. "
+            "Target: urban adults aged 25+ affected by diabetes or "
+            "moderate hyperglycemia, with enough purchasing power for "
+            "eating out."
         ),
         "part_adultes_25_plus": 0.36,      # derive de la pyramide RGPH-5
         "prevalence_diabete": 0.034,       # 3,4 % des adultes
@@ -207,12 +221,19 @@ SECTEURS = {
     },
     "agrobusiness": {
         "libelle": "Agrobusiness (transformation agroalimentaire)",
+        "libelle_en": "Agribusiness (food processing)",
         "poste_depense": "part_alimentation_pct",
         "description": (
             "Transformation et valorisation de la production agricole locale. "
             "TAM construit sur deux jambes : la demande interne en produits "
             "alimentaires transformes et la valeur de la production agricole "
             "regionale mobilisable en amont."
+        ),
+        "description_en": (
+            "Processing and adding value to local agricultural output. "
+            "TAM is built on two legs: domestic demand for processed food "
+            "products and the value of regional agricultural output still "
+            "available upstream."
         ),
         "part_produits_transformes": 0.30,   # du budget alimentaire
         "prix_moyen_tonne_fcfa": 185_000,    # valorisation moyenne matiere premiere
@@ -232,6 +253,18 @@ SECTEURS = {
 # --------------------------------------------------------------------------
 ANTHROPIC_MODEL = "claude-sonnet-5"
 ANTHROPIC_MAX_TOKENS = 1024
+
+
+def libelle_secteur(secteur: str, lang: str = "fr") -> str:
+    """Nom d'affichage d'un secteur, dans la langue demandee."""
+    p = SECTEURS[secteur]
+    return p.get(f"libelle_{lang}", p["libelle"]) if lang != "fr" else p["libelle"]
+
+
+def description_secteur(secteur: str, lang: str = "fr") -> str:
+    """Description d'un secteur, dans la langue demandee."""
+    p = SECTEURS[secteur]
+    return p.get(f"description_{lang}", p["description"]) if lang != "fr" else p["description"]
 
 
 def get_api_key() -> str | None:

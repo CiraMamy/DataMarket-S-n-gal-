@@ -182,6 +182,27 @@ dégradée mais honnête sur son état (message affiché à l'utilisateur).
 
 ---
 
+## Langue (FR/EN)
+
+Sélecteur 🌐 en haut de la barre latérale. Le choix est encodé dans l'URL
+(`?lang=en`), donc un lien partagé conserve la langue de celui qui l'a généré.
+
+Couvert : l'intégralité de l'interface Streamlit (`app.py`), les libellés et
+descriptions des trois secteurs (`config.SECTEURS`), les titres et légendes
+des graphiques (`dashboard.py`), et la synthèse factuelle générée localement
+(`nlp_agent.synthese_locale`). Vérifié via `streamlit.testing.v1.AppTest`
+dans les deux langues : sélecteur, permalien, études de cas, tous les
+onglets et tous les expanders (Impact & méthode, Sensibilité, Décision),
+aucune exception.
+
+**Limite assumée** : le commentaire généré par l'API Claude
+(`nlp_agent.redaction_synthese`) reste en français quelle que soit la langue
+choisie — le module bascule de toute façon sur la synthèse locale dès que
+« Forcer l'analyse locale » est actif (comportement par défaut sans clé
+API). Le rapport PDF (`report.py`) reste également en français uniquement.
+
+---
+
 ## Sources et statut des données
 
 | Source | Usage | Millésime |
