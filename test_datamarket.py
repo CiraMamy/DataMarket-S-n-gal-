@@ -17,6 +17,7 @@ import pytest
 import config
 import market
 import nlp_agent
+import territory
 from pipeline import (
     JeuDeDonnees, charger_donnees, nettoyer_nombre, normaliser_region, preparer,
 )
@@ -354,6 +355,51 @@ class TestClassementRegional:
 # ==========================================================================
 # MODULE 3 - Interface conversationnelle
 # ==========================================================================
+
+class TestTerritoryEngine:
+
+    def test_46_departements_sur_14_regions(self):
+        assert len(territory.DEPARTEMENTS) == 14
+        assert sum(len(d) for d in territory.DEPARTEMENTS.values()) == 46
+
+    def test_chaque_departement_rattache_a_une_region_du_referentiel(self):
+        for region in territory.DEPARTEMENTS:
+            assert region in config.REGIONS
+
+    def test_mbour_est_ambigu(self):
+        resolution = territory.resoudre_territoire("Mbour")
+        assert resolution is not None
+        assert resolution.ambigu
+        assert resolution.region == "Thies"
+        assert len(resolution.interpretations) == 2
+
+    def test_region_du_departement(self):
+        assert territory.region_du_departement("Mbour") == "Thies"
+        assert territory.region_du_departement("Bignona") == "Ziguinchor"
+        assert territory.region_du_departement("Inconnu") is None
+
+    @pytest.mark.parametrize("saisie", ["mbour", "MBOUR", "Mbour", " mbour "])
+    def test_resolution_insensible_a_la_casse_et_aux_espaces(self, saisie):
+        resolution = territory.resoudre_territoire(saisie)
+        assert resolution is not None and resolution.region == "Thies"
+
+    def test_ville_simple_non_ambigue(self):
+        # Touba est une ville du referentiel mais n'est pas elle-meme un nom
+        # de departement (elle releve du departement de Mbacke) : pas
+        # d'ambiguite commune/departement.
+        resolution = territory.resoudre_territoire("Touba")
+        assert resolution is not None
+        assert resolution.region == "Diourbel"
+        assert not resolution.ambigu
+
+    def test_territoire_inconnu_retourne_none(self):
+        assert territory.resoudre_territoire("Atlantide") is None
+        assert territory.resoudre_territoire("") is None
+
+    def test_ambiguite_remonte_dans_les_notes_de_intention(self):
+        intention = nlp_agent.analyser_local("Je veux ouvrir une supérette à Mbour")
+        assert any("commune" in n and "département" in n for n in intention.notes)
+
 
 class TestExtractionIntention:
 

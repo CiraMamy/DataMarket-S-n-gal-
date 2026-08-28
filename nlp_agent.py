@@ -32,6 +32,7 @@ import unicodedata
 from dataclasses import dataclass, field
 
 import config
+import territory
 from pipeline import JeuDeDonnees
 from market import ResultatMarche, calculer
 
@@ -180,6 +181,9 @@ def analyser_local(phrase: str) -> Intention:
     if meilleure_ville:
         intention.ville = meilleure_ville.title()
         intention.confiance = min(intention.confiance + 0.1, 0.95)
+        resolution = territory.resoudre_territoire(intention.ville)
+        if resolution and resolution.ambigu:
+            intention.notes.append(resolution.note)
     else:
         from pipeline import normaliser_region
 
@@ -441,6 +445,9 @@ def _valider(donnees: dict, phrase: str) -> Intention:
     ville = donnees.get("ville")
     if isinstance(ville, str) and ville.strip():
         intention.ville = ville.strip().title()
+        resolution = territory.resoudre_territoire(intention.ville)
+        if resolution and resolution.ambigu:
+            notes.append(resolution.note)
 
     # Budget
     budget = donnees.get("budget")

@@ -68,11 +68,23 @@ elle repose sur un recensement d'entreprises de 2016.
 | Territoire | Département de Mbour, région de Thiès | Référentiel territorial (D01, D11) | `CALC` |
 | Budget | Saisi par l'utilisateur | Extraction ou formulaire | `HYP` |
 
-> **Point d'attention.** « Mbour » désigne **trois entités distinctes** : la
-> commune de Mbour, le département de Mbour, et l'arrondissement. Le
-> référentiel territorial doit lever l'ambiguïté et **demander confirmation à
-> l'utilisateur** plutôt que de choisir silencieusement. C'est exactement le
-> genre de raccourci qui ruine la crédibilité d'un chiffre.
+> **Point d'attention — traité le 29 août 2026.** « Mbour » désigne **trois
+> entités distinctes** : la commune de Mbour, le département de Mbour, et
+> l'arrondissement. Le référentiel territorial doit lever l'ambiguïté et
+> **demander confirmation à l'utilisateur** plutôt que de choisir
+> silencieusement. C'est exactement le genre de raccourci qui ruine la
+> crédibilité d'un chiffre.
+>
+> **Traitement apporté (`territory.py`)** : un Territory Engine résout
+> désormais explicitement l'ambiguïté commune/département (hiérarchie des
+> 46 départements officiels, vérifiée par source publique) et l'affiche à
+> l'utilisateur dans le détail de l'interprétation, plutôt que de la
+> masquer. Limite assumée : faute de données démographiques au niveau
+> départemental ou communal réellement intégrées (D01 toujours hors MVP,
+> cf. `DATA_INVENTORY.md`), les deux lectures de "Mbour" aboutissent
+> aujourd'hui au même niveau de calcul — la région. Ce module est le point
+> d'extension pour brancher une vraie donnée communale/départementale
+> quand elle sera disponible, sans reconstruire la résolution territoriale.
 
 ### 2.2 Chaîne de données
 

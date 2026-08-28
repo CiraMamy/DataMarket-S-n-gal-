@@ -49,12 +49,12 @@ n'est pas en V3.
 | D10 | ODP / Senegal Data Portal | ANSD / Knoema | Variable | National, région | CSV, JSON, SDMX, XLSX | Libre | V2 | Haute |
 | D11 | Frontières administratives | geoBoundaries | 2023 | ADM1/2/3 | GeoJSON | Libre (CC BY) | V1 | **Critique** |
 | D12 | Points d'intérêt commerciaux | OpenStreetMap | Continu | Point GPS | JSON (Overpass) | Libre (ODbL) | V1 | Haute |
-| D13 | Enquêtes agricoles annuelles | DAPSA / ANSD | Variable | Région | PDF, XLSX | À vérifier | **V0** | *Remplacé par D17* |
+| D13 | Enquêtes agricoles annuelles | DAPSA / ANSD | Variable | Région | PDF, XLSX | À vérifier | **V0** | *Voir note D17 — pas remplacé* |
 | D14 | Enquête emploi (ENES) | ANSD | Variable | Région | PDF | À vérifier | **V0** | Basse |
 | D15 | Indicateurs Banque mondiale | Banque mondiale | 1960-2024 | National | JSON (API) | Libre | V1 | Basse |
 | D16 | EDS / DHS Sénégal | ANSD / ICF | 2023 | Région | SPSS, Stata | **Inscription requise** | V1 | Basse |
-| **D17** | **AgriData — API CKAN** | ANSD / IPAR / DAPSA | Variable | À confirmer | **JSON, CSV (API)** | Libre | V2 | **Critique** |
-| **D18** | **ODP Régional — API** | ANSD | Variable | **Département** | **JSON, CSV (API)** | Libre | V2 | **Critique** |
+| **D17** | **AgriData — API CKAN** | ANSD / IPAR / DAPSA | Variable | **National (vérifié — pas régional)** | **JSON, CSV (API)** | Libre | **V3** | Moyenne |
+| **D18** | **ODP Régional — API** | ANSD | Variable | **Département** | **JSON, CSV (API)** | **Verrouillée (HTTP 401)** | V2 | **Critique — bloquée** |
 
 **Verdict de couverture pour le MVP :** les sources D01, D02, D04, D06, D08,
 D10, D11 et D12 suffisent à alimenter le cas d'usage Mbour de bout en bout.
@@ -327,21 +327,23 @@ Les sources D05 et D09 (microdonnées) sont **exclues du MVP** — voir §3.
 
 ---
 
-### D13 — Enquêtes agricoles annuelles (EAA / DAPSA) — *superseded par D17*
+### D13 — Enquêtes agricoles annuelles (EAA / DAPSA) — *pas remplacée par D17*
 
 | Champ | Valeur |
 |---|---|
 | **Producteur** | DAPSA, ministère de l'Agriculture |
 | **Vérification** | **V0** — aucune URL directe identifiée pour les rapports EAA |
-| **Statut** | **Rendu largement caduc par D17.** La DAPSA est co-productrice de la plateforme AgriData, qui expose ses données via une API CKAN. Passer par D17 plutôt que de chercher les PDF d'enquête. |
-| **Reste utile si** | AgriData ne couvre pas la production par région et par culture. Dans ce cas seulement, revenir chercher les rapports EAA. |
+| **Statut — mis à jour le 25 août 2026** | **D17 ne couvre pas la production par région et par culture** (vérifié : les jeux "production" d'AgriData sont des séries nationales à une ligne, pas des tableaux région × culture). La condition de repli prévue ci-dessous s'applique : D13 **reste nécessaire**, pas caduque. |
+| **Reste utile si** | AgriData ne couvre pas la production par région et par culture — **c'est le cas confirmé**. Chercher les rapports EAA (PDF) reste la piste à explorer pour la production agricole régionale. |
 
 ---
 
-### D17 — AgriData (ANSD / IPAR / DAPSA) — API CKAN ⭐ NOUVEAU
+### D17 — AgriData (ANSD / IPAR / DAPSA) — API CKAN
 
-> **Débloque le secteur agrobusiness**, qui était la seule brique du prototype
-> sans aucune source vérifiée.
+> **Accessible et documenté, mais ne débloque pas la ventilation régionale
+> espérée pour l'agrobusiness** (voir vérification du 25 août 2026
+> ci-dessous). Reste utile au niveau national et pour des indicateurs
+> hors-sujet pour ce projet (hydrologie, cheptel).
 
 | Champ | Valeur |
 |---|---|
@@ -356,28 +358,36 @@ Les sources D05 et D09 (microdonnées) sont **exclues du MVP** — voir §3.
 | **Doc API** | https://agridata.ansd.sn/fr/api/1/util/snippet/api_info.html?resource_id=9b40d530-9f3c-4916-8813-51b8ed788f65 |
 | **Format** | **JSON et CSV via API** — machine-readable natif |
 | **Accessibilité** | Libre, sans authentification pour la lecture |
-| **Vérification** | **V2** — existence du portail, technologie CKAN et extension DataStore confirmées par recoupement. **Aucun appel d'API n'a pu être exécuté** (environnement d'exécution indisponible). |
+| **Vérification** | **V3 — `explorer` réellement exécuté le 25 août 2026.** Un bug bloquait toute connexion Python (certificat intermédiaire manquant côté serveur, corrigé dans `ckan_client.py`). Une fois corrigé : 298 jeux de données, 281 ressources interrogeables. |
 | **Endpoints CKAN standard** | `/api/3/action/package_list`, `package_search`, `package_show`, `datastore_search`, **`datastore_search_sql`** |
 | **resource_id documentés** | `9b40d530-9f3c-4916-8813-51b8ed788f65`, `ac648d96-007f-416c-833c-705c8108f9ea` |
 | **Utilité DataMarket** | Sector Engine agricole, secteur agrobusiness, gisement de matière première du Market Size Engine. |
-| **Méthode d'importation** | `ckan_client.py` — implémenté. `python ckan_client.py explorer` cartographie le portail, `tout-agricole` ingère et dépose dans `data/raw/`. |
-| **Ce qui reste à confirmer** | Niveau géographique réel (national seul ou régional ?), millésime des campagnes, **licence** — non renseignée dans les métadonnées consultées. |
+| **Méthode d'importation** | `ckan_client.py` — implémenté et **vérifié en conditions réelles**. `python ckan_client.py explorer` cartographie le portail, `sonder` diagnostique le niveau géographique. |
+| **Niveau géographique réel — CONFIRMÉ NATIONAL, pas régional** | Les 16 jeux "prioritaires" (population, dépenses, production) suivent tous le format "fiche indicateur SDR" : une seule ligne, valeurs par année, **malgré des titres promettant une ventilation "par région"**. Un balayage exhaustif des 281 ressources interrogeables (filtre 10-20 lignes, proxy d'une table à une ligne par région) n'a remonté **aucune** table région × indicateur exploitable pour ce projet. Les seules données réellement régionales trouvées sont hors-sujet (ex. seuils d'alerte des cours d'eau par station). |
+| **Licence** | Toujours non renseignée dans les métadonnées consultées — **non résolu**. |
 
 > ⚠️ **La licence n'est pas confirmée.** Le §39 exige licence, propriétaire et
 > conditions d'utilisation pour chaque dataset. La commande `explorer` remonte
 > le champ `license_title` de chaque jeu ; si le champ est vide, il faut
 > écrire à l'ANSD avant tout usage en production.
+>
+> **Conséquence pour la priorité MVP.** Le statut "Critique" de cette fiche
+> doit être revu à la baisse : la source est accessible et documentée, mais
+> ne débloque **pas** la ventilation régionale espérée. Elle reste utile au
+> niveau national (séries longues) et pour des indicateurs hors-sujet
+> (hydrologie). Voir `ckan_client.py`, section "ETAT VERIFIE", pour le détail.
 
-- [ ] **V3 — `explorer` exécuté, catalogue produit**
-- [ ] **Niveau géographique confirmé**
+- [x] **V3 — `explorer` exécuté, catalogue produit** (25 août 2026)
+- [x] **Niveau géographique confirmé — national, pas régional**
 - [ ] **Licence confirmée**
 
 ---
 
-### D18 — ODP Régional (odpregional.statsenegal.sn) ⭐ NOUVEAU
+### D18 — ODP Régional (odpregional.statsenegal.sn)
 
-> **Potentiellement la solution au problème du niveau départemental**, qui est
-> le premier bloquant identifié dans l'analyse d'écart.
+> **Toujours la piste la plus prometteuse pour le niveau départemental**,
+> mais **bloquée par une authentification** (HTTP 401, testé le 25 août
+> 2026) — voir l'action requise ci-dessous avant toute nouvelle tentative.
 
 | Champ | Valeur |
 |---|---|
@@ -388,13 +398,15 @@ Les sources D05 et D09 (microdonnées) sont **exclues du MVP** — voir §3.
 | **Objet** | Diffusion des statistiques officielles des 14 régions, à l'appui de la politique de décentralisation |
 | **Niveau géographique** | **Région, département, arrondissement, commune** — exemple relevé : Fatick = 3 départements, 9 arrondissements, 40 communes |
 | **Format** | **JSON et CSV** |
-| **Accessibilité** | Libre |
-| **Vérification** | **V2** pour l'existence et la structure ; **V0** pour l'API — le type d'API (CKAN ou REST propriétaire) **n'est pas confirmé** |
-| **Utilité DataMarket** | Référentiel territorial (§13), Territory Engine, comparateur, et surtout **le cas Mbour au bon niveau géographique**. |
-| **Méthode d'importation** | `ckan_client.py --portail odp explorer`. Le client teste les endpoints CKAN et, en cas d'échec, affiche les adresses à ouvrir manuellement pour identifier le type d'API. |
+| **Accessibilité** | **Verrouillée par authentification — testé le 25 août 2026 : `HTTP 401` sur `/api/3/action/status_show`.** L'API existe et répond, mais aucun accès sans identifiants. La mention "Libre" ci-dessus était une hypothèse documentaire, non vérifiée ; elle est corrigée ici après test réel. |
+| **Vérification** | **V2** pour l'existence et la structure (page web) ; **API confirmée de type CKAN (répond en HTTP), mais inaccessible sans authentification** — donc toujours inexploitable en l'état pour ce projet. |
+| **Utilité DataMarket** | Référentiel territorial (§13), Territory Engine, comparateur, et surtout **le cas Mbour au bon niveau géographique** — reste la piste la plus prometteuse pour descendre au département, **si un accès est obtenu**. |
+| **Méthode d'importation** | `ckan_client.py --portail odp explorer`. Le client détecte correctement l'échec et le rapporte (pas de plantage), mais ne peut pas contourner l'authentification. |
 | **Rapport avec D01** | Complémentaire, pas redondant. D01 (Répertoire des localités) descend au village mais ne porte que la population et les ménages. D18 porte des **indicateurs de développement** au niveau département. Les deux sont nécessaires. |
+| **Action requise** | Contacter l'ANSD pour obtenir un accès (clé API ou identifiants) avant toute nouvelle tentative d'intégration. |
 
-- [ ] **V3 — type d'API identifié (CKAN / REST / aucune)**
+- [x] **Type d'API identifié — CKAN, confirmé par la forme de la réponse HTTP 401**
+- [ ] **Accès obtenu (bloqué : authentification requise)**
 - [ ] **V3 — un export département obtenu**
 - [ ] **Licence confirmée**
 
