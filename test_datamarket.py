@@ -352,6 +352,98 @@ class TestClassementRegional:
         assert (c["TAM (FCFA)"] >= c["SAM (FCFA)"]).all()
 
 
+class TestScenarioEngine:
+
+    @pytest.mark.parametrize("secteur", list(config.SECTEURS))
+    def test_conservateur_inferieur_a_realiste_inferieur_a_ambitieux(self, jeu, secteur):
+        df = market.scenarios(jeu, secteur, regions=["Thies"])
+        par_nom = df.set_index("scenario")
+        assert par_nom.loc["conservateur", "som"] <= par_nom.loc["realiste", "som"]
+        assert par_nom.loc["realiste", "som"] <= par_nom.loc["ambitieux", "som"]
+
+    def test_trois_scenarios_seulement(self, jeu):
+        df = market.scenarios(jeu, "commerce_proximite")
+        assert set(df["scenario"]) == {"conservateur", "realiste", "ambitieux"}
+
+    def test_scenarios_partagent_le_meme_tam(self, jeu):
+        # Les scenarios ne font varier que la part de marche visee (SOM) :
+        # le TAM, qui ne depend pas de cette hypothese, doit rester identique.
+        df = market.scenarios(jeu, "commerce_proximite", regions=["Dakar"])
+        assert df["tam"].nunique() == 1
+
+
+class TestEvidenceVerificationLayer:
+
+    @pytest.mark.parametrize("secteur", list(config.SECTEURS))
+    def test_every_market_result_has_evidence(self, jeu, secteur):
+        """Aucun resultat final ne contient un chiffre non trace."""
+        r = market.calculer(jeu, secteur)
+        assert market.verifier_preuves(r) == []
+
+    def test_resultat_sans_provenance_est_detecte(self, jeu):
+        r = market.calculer(jeu, "commerce_proximite")
+        r_casse = market.ResultatMarche(
+            secteur=r.secteur, libelle=r.libelle, regions=r.regions,
+            tam=r.tam, sam=r.sam, som=r.som,
+            population_cible=r.population_cible, detail_regional=r.detail_regional,
+            hypotheses=r.hypotheses, avertissements=[], provenance={})
+        anomalies = market.verifier_preuves(r_casse)
+        assert len(anomalies) >= 4
+        assert all("UNSUPPORTED_VALUE" in a for a in anomalies[:4])
+
+    def test_resultat_sans_hypotheses_est_detecte(self, jeu):
+        r = market.calculer(jeu, "commerce_proximite")
+        r_casse = market.ResultatMarche(
+            secteur=r.secteur, libelle=r.libelle, regions=r.regions,
+            tam=r.tam, sam=r.sam, som=r.som,
+            population_cible=r.population_cible, detail_regional=r.detail_regional,
+            hypotheses={}, avertissements=[], provenance=r.provenance)
+        anomalies = market.verifier_preuves(r_casse)
+        assert any("Aucune hypothèse" in a for a in anomalies)
+
+    def test_incoherence_sam_superieur_tam_est_detectee(self, jeu):
+        r = market.calculer(jeu, "commerce_proximite")
+        r_casse = market.ResultatMarche(
+            secteur=r.secteur, libelle=r.libelle, regions=r.regions,
+            tam=r.tam, sam=r.tam * 1.5, som=r.som,
+            population_cible=r.population_cible, detail_regional=r.detail_regional,
+            hypotheses=r.hypotheses, avertissements=[], provenance=r.provenance)
+        anomalies = market.verifier_preuves(r_casse)
+        assert any("SAM > TAM" in a for a in anomalies)
+
+    def test_calculer_integre_automatiquement_la_verification(self, jeu):
+        """calculer() doit appeler verifier_preuves() lui-meme : un resultat
+        normal ne doit remonter aucun avertissement UNSUPPORTED_VALUE."""
+        r = market.calculer(jeu, "commerce_proximite", regions=["Thies"])
+        assert not any("UNSUPPORTED_VALUE" in a for a in r.avertissements)
+
+    def test_observed_data_is_not_reclassified_as_calculated(self):
+        # La propagation de provenance retient toujours l'intrant le moins
+        # fiable : un melange OBS + HYP ne doit jamais redescendre a OBS.
+        assert config.propager_provenance("OBS", "HYP") == "HYP"
+        assert config.propager_provenance("OBS", "OBS") == "OBS"
+        assert config.propager_provenance("OBS", "EST") == "EST"
+
+    def test_estimated_data_is_visible_to_user(self, jeu):
+        # Le badge EST doit accompagner la population cible pour les secteurs
+        # dont la cible n'est pas filtree par une hypothese comportementale.
+        r = market.calculer(jeu, "commerce_proximite")
+        assert r.provenance["population_cible"] == "EST"
+
+    def test_old_study_remains_reproducible(self, jeu):
+        # Reproductibilite : rejouer un calcul avec les memes parametres
+        # (le principe derriere le lien permanent et l'export JSON) doit
+        # redonner exactement le meme resultat.
+        params = dict(secteur="restauration_sante", regions=["Dakar"],
+                     part_geographique=0.12, part_marche_visee=0.04,
+                     budget=20_000_000)
+        r1 = market.calculer(jeu, **params)
+        r2 = market.calculer(jeu, **params)
+        assert r1.tam == r2.tam
+        assert r1.sam == r2.sam
+        assert r1.som == r2.som
+
+
 # ==========================================================================
 # MODULE 3 - Interface conversationnelle
 # ==========================================================================

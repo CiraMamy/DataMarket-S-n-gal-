@@ -339,6 +339,41 @@ TEXTES: dict[str, dict[str, str]] = {
               "with a margin of {ecart}.",
     },
 
+    # -- Scenario Engine ---------------------------------------------------
+    "scenarios_titre": {"fr": "🎯 Scénarios (conservateur / réaliste / ambitieux)", "en": "🎯 Scenarios (conservative / realistic / ambitious)"},
+    "scenarios_caption": {
+        "fr": "Trois niveaux d'ambition commerciale sur la même modélisation "
+              "— jamais un seul chiffre ne doit être lu comme une prédiction "
+              "de l'avenir. Chaque scénario multiplie la part de marché "
+              "visée ; le TAM ne change pas, seule l'ambition sur le SOM varie.",
+        "en": "Three levels of commercial ambition on the same model — no "
+              "single figure should ever be read as a prediction of the "
+              "future. Each scenario multiplies the targeted market share; "
+              "TAM stays the same, only the SOM ambition changes.",
+    },
+    "scenario_conservateur": {"fr": "Conservateur", "en": "Conservative"},
+    "scenario_realiste": {"fr": "Réaliste", "en": "Realistic"},
+    "scenario_ambitieux": {"fr": "Ambitieux", "en": "Ambitious"},
+    "col_scenario": {"fr": "Scénario", "en": "Scenario"},
+    "col_part_visee": {"fr": "Part visée", "en": "Targeted share"},
+    "col_risque": {"fr": "Risque", "en": "Risk"},
+    "risque_conservateur": {
+        "fr": "Modéré — objectif prudent : sous-exploite le marché si la "
+              "concurrence réelle est plus faible que redoutée.",
+        "en": "Moderate — cautious target: under-exploits the market if "
+              "actual competition is weaker than feared.",
+    },
+    "risque_realiste": {
+        "fr": "Faible — correspond à l'hypothèse par défaut calibrée du secteur.",
+        "en": "Low — matches the sector's calibrated default assumption.",
+    },
+    "risque_ambitieux": {
+        "fr": "Élevé — suppose une exécution et une part de marché "
+              "nettement supérieures à la référence sectorielle.",
+        "en": "High — assumes execution and market share well above the "
+              "sector's reference point.",
+    },
+
     # -- Onglets ----------------------------------------------------------
     "onglet_synthese": {"fr": "Synthèse", "en": "Summary"},
     "onglet_carte": {"fr": "Carte du potentiel", "en": "Potential map"},

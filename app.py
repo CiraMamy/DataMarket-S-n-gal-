@@ -598,6 +598,36 @@ if resultat is not None:
                     budget=config.formater_fcfa(intention.budget),
                     ecart=config.formater_fcfa(ecart_budget)))
 
+    # ---- Scenario Engine --------------------------------------------------
+    with st.expander(t("scenarios_titre", lang), expanded=False):
+        st.caption(t("scenarios_caption", lang))
+
+        table_scenarios = market.scenarios(
+            jeu, resultat.secteur, regions=resultat.regions,
+            part_geographique=resultat.hypotheses["part_geographique"],
+            part_marche_visee=resultat.hypotheses["part_marche_visee_saisie"],
+            budget=resultat.hypotheses.get("budget_fcfa"))
+
+        noms_scenarios = {
+            "conservateur": t("scenario_conservateur", lang),
+            "realiste": t("scenario_realiste", lang),
+            "ambitieux": t("scenario_ambitieux", lang),
+        }
+        risques_scenarios = {
+            "conservateur": t("risque_conservateur", lang),
+            "realiste": t("risque_realiste", lang),
+            "ambitieux": t("risque_ambitieux", lang),
+        }
+        affichage_scenarios = pd.DataFrame({
+            t("col_scenario", lang): table_scenarios["scenario"].map(noms_scenarios),
+            t("col_part_visee", lang): table_scenarios["part_marche_visee"].map(lambda v: f"{v:.1%}"),
+            "TAM": table_scenarios["tam"].map(config.formater_fcfa),
+            "SAM": table_scenarios["sam"].map(config.formater_fcfa),
+            "SOM": table_scenarios["som"].map(config.formater_fcfa),
+            t("col_risque", lang): table_scenarios["scenario"].map(risques_scenarios),
+        })
+        st.dataframe(affichage_scenarios, hide_index=True, width='stretch')
+
     # ---- Onglets --------------------------------------------------------
     onglets = st.tabs([
         t("onglet_synthese", lang), t("onglet_carte", lang), t("onglet_detail", lang),

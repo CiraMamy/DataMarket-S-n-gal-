@@ -375,7 +375,7 @@ def calculer(
         "som": prov_som,
     }
 
-    return ResultatMarche(
+    resultat = ResultatMarche(
         secteur=secteur,
         libelle=p["libelle"],
         regions=regions,
@@ -388,6 +388,11 @@ def calculer(
         avertissements=avertissements,
         provenance=provenance,
     )
+
+    # Evidence Verification Layer : toute anomalie devient un avertissement
+    # visible plutot qu'un defaut silencieux (cf. verifier_preuves plus bas).
+    resultat.avertissements.extend(verifier_preuves(resultat))
+    return resultat
 
 
 # ==========================================================================
@@ -433,6 +438,115 @@ def fourchette(
         "sam": {"bas": bas.sam, "central": central.sam, "haut": haut.sam},
         "som": {"bas": bas.som, "central": central.som, "haut": haut.som},
     }
+
+
+# ==========================================================================
+# Scenario Engine
+# ==========================================================================
+# Distinct de fourchette() : fourchette() explore l'incertitude de
+# MODELISATION a ambition constante (le meme objectif, mesure avec plus ou
+# moins de confiance). scenarios() explore des niveaux d'AMBITION
+# commerciale differents, a modelisation constante. Les deux repondent a
+# des questions differentes et sont complementaires, pas redondants.
+
+SCENARIOS = {
+    "conservateur": {
+        "facteur_part_marche": 0.5,
+        "risque": ("Modéré — objectif prudent : sous-exploite le marché si "
+                  "la concurrence réelle est plus faible que redoutée."),
+    },
+    "realiste": {
+        "facteur_part_marche": 1.0,
+        "risque": "Faible — correspond à l'hypothèse par défaut calibrée du secteur.",
+    },
+    "ambitieux": {
+        "facteur_part_marche": 2.0,
+        "risque": ("Élevé — suppose une exécution et une part de marché "
+                  "nettement supérieures à la référence sectorielle."),
+    },
+}
+
+
+def scenarios(
+    jeu: JeuDeDonnees,
+    secteur: str,
+    regions: list[str] | None = None,
+    part_geographique: float | None = None,
+    part_marche_visee: float | None = None,
+    budget: float | None = None,
+) -> pd.DataFrame:
+    """
+    Trois scenarios nommes (conservateur / realiste / ambitieux), obtenus en
+    multipliant la part de marche visee par un facteur explicite -- jamais
+    un chiffre invente. Le "risque" qualifie l'ecart a l'hypothese par
+    defaut du secteur (plus l'ambition s'en eloigne, plus l'estimation est
+    incertaine), ce n'est pas une prediction de reussite commerciale.
+
+    Ne jamais presenter un seul de ces scenarios comme LE resultat : c'est
+    justement ce que cette fonction sert a eviter ("ne jamais donner
+    l'impression qu'un seul chiffre predit le futur").
+    """
+    p_secteur = config.SECTEURS[secteur]
+    base_part_som = (p_secteur["som_defaut"] if part_marche_visee is None
+                     else float(part_marche_visee))
+
+    lignes = []
+    for nom, spec in SCENARIOS.items():
+        part_som_scenario = min(max(base_part_som * spec["facteur_part_marche"], 0.0), 1.0)
+        r = calculer(jeu, secteur, regions=regions,
+                     part_geographique=part_geographique,
+                     part_marche_visee=part_som_scenario, budget=budget)
+        lignes.append({
+            "scenario": nom,
+            "part_marche_visee": part_som_scenario,
+            "tam": r.tam, "sam": r.sam, "som": r.som,
+            "risque": spec["risque"],
+        })
+    return pd.DataFrame(lignes)
+
+
+# ==========================================================================
+# Evidence Verification Layer
+# ==========================================================================
+
+def verifier_preuves(resultat: "ResultatMarche") -> list[str]:
+    """
+    Verifie qu'aucun chiffre cle du resultat n'est presente sans provenance
+    tracable. Retourne la liste des anomalies detectees ; une liste vide
+    signifie que tout est justifiable.
+
+    Controles effectues :
+      - population_cible, tam, sam, som portent chacun un statut de
+        provenance appartenant a l'echelle connue (OBS/CALC/EST/PROJ/HYP) ;
+      - au moins une hypothese de calcul est enregistree (aucun chiffre
+        n'est produit "a partir de rien") ;
+      - aucun montant negatif ;
+      - la hierarchie TAM >= SAM >= SOM est respectee.
+
+    Appelee automatiquement a la fin de calculer() : toute anomalie devient
+    un avertissement visible plutot qu'un defaut silencieux.
+    """
+    anomalies: list[str] = []
+
+    for cle in ("population_cible", "tam", "sam", "som"):
+        statut = resultat.provenance.get(cle)
+        if statut is None:
+            anomalies.append(f"'{cle}' n'a pas de classement de provenance (UNSUPPORTED_VALUE).")
+        elif statut not in config.ORDRE_PROVENANCE:
+            anomalies.append(
+                f"'{cle}' a un statut de provenance invalide : {statut!r}.")
+
+    if not resultat.hypotheses:
+        anomalies.append("Aucune hypothèse de calcul enregistrée (UNSUPPORTED_VALUE).")
+
+    if resultat.tam < 0 or resultat.sam < 0 or resultat.som < 0:
+        anomalies.append("Montant négatif détecté parmi TAM/SAM/SOM.")
+    if resultat.sam > resultat.tam + 1e-6:
+        anomalies.append("Incohérence non tracée : SAM > TAM.")
+    if resultat.som > resultat.sam + 1e-6:
+        anomalies.append("Incohérence non tracée : SOM > SAM.")
+
+    return anomalies
 
 
 # ==========================================================================
