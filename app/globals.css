@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-navy: #10233F;
+  --color-mustard: #D5A021;
+  --color-ivory: #F6F4EF;
+  --color-slate-light: #E8EAF0;
+  --color-text-muted: #667085;
+  --color-navy-secondary: #26364F;
+  --color-mustard-dark: #9A6D0B;
+  --color-white: #FFFFFF;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-[#F8F8F6] text-slate-800 antialiased;
+  font-feature-settings: 'rlig' 1, 'calt' 1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(213, 160, 33, 0.2);
+}
+
+@layer components {
+  .container-shell {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .surface {
+    @apply rounded-2xl border border-slate-200 bg-white;
+  }
+
+  .chip {
+    @apply inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700;
+  }
+
+  .section-title {
+    @apply text-3xl font-semibold tracking-tight text-navy;
+  }
+
+  .link-arrow {
+    @apply inline-flex items-center gap-2 font-medium text-navy transition hover:text-navySecondary;
+  }
+}
