@@ -43,7 +43,8 @@ def carte_potentiel(potentiel: pd.DataFrame, geo: Geographie,
     carte = folium.Map(
         location=[14.45, -14.45],
         zoom_start=7,
-        tiles="CartoDB positron",
+        tiles="OpenStreetMap",
+        attr="© OpenStreetMap contributors",
         control_scale=True,
     )
 

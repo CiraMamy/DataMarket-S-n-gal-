@@ -639,6 +639,20 @@ class TestVisualisation:
             p, Geographie(None, "cercles", "test"))
         assert carte is not None
 
+    def test_carte_utilise_une_source_de_tuiles_sans_cle(self, jeu):
+        import warnings
+
+        import dashboard
+        from geo import Geographie
+
+        p = market.potentiel_par_region(jeu, "commerce_proximite")
+        with warnings.catch_warnings(record=True) as enregistrements:
+            warnings.simplefilter("always")
+            carte = dashboard.carte_potentiel(
+                p, Geographie(None, "cercles", "test"))
+        assert carte is not None
+        assert len(enregistrements) == 0
+
 
 # ==========================================================================
 # Coherence transversale
